@@ -85,20 +85,20 @@ jobs:
           env GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o pocketbase_arm64
           env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o pocketbase_amd64
           cd ..
-          docker buildx build db/ --no-cache -t YOUR_USERNAME/wanderer-db:$VERSION -t YOUR_USERNAME/wanderer-db:latest-${{ github.ref_name }} --platform=linux/amd64,linux/arm64 --push
+          docker buildx build db/ --no-cache -t guacamoleee/wanderer-db:$VERSION -t guacamoleee/wanderer-db:latest-${{ github.ref_name }} --platform=linux/amd64,linux/arm64 --push
       
           # Build web image
           export PUBLIC_VALHALLA_URL=https://valhalla1.openstreetmap.de
           cd web
           npm ci && npm run build
           cd ..
-          docker buildx build web/ --no-cache -t YOUR_USERNAME/wanderer-web:$VERSION -t YOUR_USERNAME/wanderer-web:latest-${{ github.ref_name }} --platform=linux/amd64,linux/arm64 --push
+          docker buildx build web/ --no-cache -t guacamoleee/wanderer-web:$VERSION -t guacamoleee/wanderer-web:latest-${{ github.ref_name }} --platform=linux/amd64,linux/arm64 --push
       
           # Build docs image
           cd docs
           npm ci && npm run build
           cd ..
-          docker buildx build docs/ --no-cache -t YOUR_USERNAME/wanderer-docs:$VERSION -t YOUR_USERNAME/wanderer-docs:latest-${{ github.ref_name }} --platform=linux/amd64,linux/arm64 --push
+          docker buildx build docs/ --no-cache -t guacamoleee/wanderer-docs:$VERSION -t guacamoleee/wanderer-docs:latest-${{ github.ref_name }} --platform=linux/amd64,linux/arm64 --push
 
   # Job 3: Publish the Release
   release:
