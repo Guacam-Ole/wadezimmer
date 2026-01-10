@@ -31,9 +31,11 @@ jobs:
         id: set_version
         run: |
           VERSION=${{ github.event.inputs.version }}
+          BRANCH=${{ github.ref_name }}
           cd web && npm version $VERSION --no-git-tag-version && cd ..
           cd docs && npm version $VERSION --no-git-tag-version && cd ..
-          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+          echo "version=v$VERSION-$BRANCH" >> $GITHUB_OUTPUT
+          echo "raw_version=$VERSION" >> $GITHUB_OUTPUT
 
       # 4. Tag and push the new versions
       - name: Commit and Tag
@@ -41,8 +43,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add web/package.json docs/package.json
-          git commit -m "Release ${{ github.event.inputs.version }}"
-          git tag "v${{ github.event.inputs.version }}"
+          git commit -m "Release ${{ github.event.inputs.version }} (${{ github.ref_name }})"
+          git tag "v${{ github.event.inputs.version }}-${{ github.ref_name }}"
           git push origin HEAD --tags
 
   # Job 2: Build Docker Images
@@ -83,20 +85,20 @@ jobs:
           env GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o pocketbase_arm64
           env GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o pocketbase_amd64
           cd ..
-          docker buildx build db/ --no-cache -t guacamoleee/wanderer-db:$VERSION -t guacamoleee/wanderer-db:latest --platform=linux/amd64,linux/arm64 --push
-
+          docker buildx build db/ --no-cache -t YOUR_USERNAME/wanderer-db:$VERSION -t YOUR_USERNAME/wanderer-db:latest-${{ github.ref_name }} --platform=linux/amd64,linux/arm64 --push
+      
           # Build web image
           export PUBLIC_VALHALLA_URL=https://valhalla1.openstreetmap.de
           cd web
           npm ci && npm run build
           cd ..
-          docker buildx build web/ --no-cache -t guacamoleee/wanderer-web:$VERSION -t guacamoleee/wanderer-web:latest --platform=linux/amd64,linux/arm64 --push
-
+          docker buildx build web/ --no-cache -t YOUR_USERNAME/wanderer-web:$VERSION -t YOUR_USERNAME/wanderer-web:latest-${{ github.ref_name }} --platform=linux/amd64,linux/arm64 --push
+      
           # Build docs image
           cd docs
           npm ci && npm run build
           cd ..
-          docker buildx build docs/ --no-cache -t guacamoleee/wanderer-docs:$VERSION -t guacamoleee/wanderer-docs:latest --platform=linux/amd64,linux/arm64 --push
+          docker buildx build docs/ --no-cache -t YOUR_USERNAME/wanderer-docs:$VERSION -t YOUR_USERNAME/wanderer-docs:latest-${{ github.ref_name }} --platform=linux/amd64,linux/arm64 --push
 
   # Job 3: Publish the Release
   release:
