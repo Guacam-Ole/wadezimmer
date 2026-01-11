@@ -4,7 +4,7 @@ COPY ./build build/
 COPY package*.json .
 RUN npm ci --omit=dev
 EXPOSE 3000
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 
 COPY ./cron.sh /etc/periodic/15min/cron
 RUN chmod +x /etc/periodic/15min/cron
