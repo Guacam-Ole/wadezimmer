@@ -9,6 +9,10 @@ export default defineConfig({
 	ssr: { noExternal: ['three'] },
 	...(process.env.WANDERER_ENV == "dev" ? {
 		server: {
+			build: {
+			sourcemap: true,
+			minify: false
+		},
 			// https: {
 			// 	key: fs.readFileSync('.svelte-kit/key.pem'),
 			// 	cert: fs.readFileSync('.svelte-kit/cert.pem')
