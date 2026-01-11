@@ -79,6 +79,7 @@ jobs:
       - name: Build Docker Images
         env:
           VERSION: ${{ needs.versioning.outputs.version }}
+          WANDERER_ENV: ${{ github.ref == 'refs/heads/preview' && 'dev' || '' }}
         run: |
           # Build db image
           cd db
