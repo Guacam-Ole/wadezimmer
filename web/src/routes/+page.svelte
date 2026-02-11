@@ -148,7 +148,7 @@
 </script>
 
 <svelte:head>
-    <title>Home | wanderer</title>
+    <title>Home | {env.PUBLIC_TITLE || "wanderer"}</title>
 </svelte:head>
 
 <svelte:window onscroll={onScroll} />
@@ -162,11 +162,7 @@
         style="max-height: calc(100vh - 112px); top: 112px;"
     >
         <h2 class="text-5xl sm:text-6xl md:text-7xl font-bold">
-            {#if env.PUBLIC_WELCOME_TEXT}
-                {env.PUBLIC_WELCOME_TEXT}
-            {:else}
-                {$_("welcome_to")} <span class="-tracking-[0.075em]">wanderer</span>
-            {/if}
+            {$_("welcome_to")} <span class="-tracking-[0.075em]">{env.PUBLIC_TITLE || "wanderer"}</span>
         </h2>
         <h5>
             {$_("hero_section_0_text")}

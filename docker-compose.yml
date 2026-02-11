@@ -67,7 +67,7 @@ services:
       PUBLIC_OVERPASS_API_URL: https://overpass-api.de
       PUBLIC_VALHALLA_URL: https://valhalla1.openstreetmap.de
       PUBLIC_NOMINATIM_URL: https://nominatim.openstreetmap.org
-      # PUBLIC_WELCOME_TEXT:
+      # PUBLIC_TITLE:
     volumes:
       - ./data/uploads:/app/uploads
       # - ./data/about.md:/app/build/client/md/about.md
