@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { env } from "$env/dynamic/public";
     import { goto } from "$app/navigation";
     import { page } from "$app/state";
     import emptyStateTrailDark from "$lib/assets/svgs/empty_states/empty_state_trail_dark.svg";
@@ -161,7 +162,11 @@
         style="max-height: calc(100vh - 112px); top: 112px;"
     >
         <h2 class="text-5xl sm:text-6xl md:text-7xl font-bold">
-            {$_("welcome_to")} <span class="-tracking-[0.075em]">wanderer</span>
+            {#if env.PUBLIC_WELCOME_TEXT}
+                {env.PUBLIC_WELCOME_TEXT}
+            {:else}
+                {$_("welcome_to")} <span class="-tracking-[0.075em]">wanderer</span>
+            {/if}
         </h2>
         <h5>
             {$_("hero_section_0_text")}
