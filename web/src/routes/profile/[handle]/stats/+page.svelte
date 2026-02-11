@@ -235,7 +235,7 @@
 </script>
 
 <svelte:head>
-    <title>{$_("profile")} | wanderer</title>
+    <title>{$_("profile")} | {page.data.appTitle}</title>
 </svelte:head>
 
 <div

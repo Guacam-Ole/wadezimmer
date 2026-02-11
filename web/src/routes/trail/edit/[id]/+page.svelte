@@ -1170,7 +1170,7 @@
     <title
         >{page.params.id !== "new"
             ? `${$formData.name} | ${$_("edit")}`
-            : $_("new-trail")} | wanderer</title
+            : $_("new-trail")} | {page.data.appTitle}</title
     >
 </svelte:head>
 
