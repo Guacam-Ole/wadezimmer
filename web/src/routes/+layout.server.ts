@@ -11,8 +11,8 @@ import { resolve, join } from 'path';
 
 function getMdPages(): Record<string, string[]> {
 	const candidates = [
-		resolve('static/md'),
-		resolve('build/client/md'),
+		resolve('static/md/custom'),
+		resolve('build/client/md/custom'),
 	];
 	const mdDir = candidates.find(p => existsSync(p));
 	if (!mdDir) return {};
