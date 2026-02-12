@@ -96,6 +96,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: [versioning, docker-build]
+    permissions:
+       contents: write
+
 
     steps:
       # 1. Checkout the repository
