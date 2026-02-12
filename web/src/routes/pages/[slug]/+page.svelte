@@ -17,7 +17,7 @@
         (async () => {
             for (const lang of candidates) {
                 try {
-                    const res = await fetch(`/md/${lang}/${slug}.md`);
+                    const res = await fetch(`/md/custom/${lang}/${slug}.md`);
                     if (res.ok) {
                         const text = await res.text();
                         content = await marked.parse(text);
