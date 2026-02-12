@@ -116,7 +116,7 @@
 </script>
 
 <svelte:head>
-    <title>{$_("trail", { values: { n: 2 } })} | wanderer</title>
+    <title>{$_("trail", { values: { n: 2 } })} | {page.data.appTitle}</title>
 </svelte:head>
 
 <main
