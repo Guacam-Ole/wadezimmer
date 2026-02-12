@@ -1,4 +1,5 @@
-# Hint: Start in cli with  gh workflow run wadezimmer-release.yaml --ref workflow -f version=0.1.0-wadezimmer 
+# gh workflow run release_request.yaml --ref localworkflow -f version=0.18.4-wz -R Guacam-Ole/wadezimmer  
+could not create workflow dispatch event: HTTP 422: Cannot trigger a 'workflow_dispatch' on a disabled workflow (https://api.github.com/repos/Guacam-Ole/wadezimmer/actions/workflows/233367617/dispatches)
 
 name: Release Workflow for Wadezimmer. DO NOT ADD TO PR!
 
