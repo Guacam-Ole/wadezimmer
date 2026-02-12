@@ -1,3 +1,5 @@
+# Hint: Start in cli with  gh workflow run wadezimmer-release.yaml --ref workflow -f version=0.1.0-wadezimmer 
+
 name: Release Workflow for Wadezimmer. DO NOT ADD TO PR!
 
 on:
