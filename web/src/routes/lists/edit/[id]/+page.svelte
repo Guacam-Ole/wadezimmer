@@ -1,6 +1,9 @@
 <script lang="ts">
     import { type List } from "$lib/models/list";
+    import { env } from "$env/dynamic/public";
     import { _ } from "svelte-i18n";
+
+    let trailsSearchLimit = Number(env.PUBLIC_TRAILS_SEARCH_LIMIT) || 3;
 
     import { page } from "$app/state";
     import emptyStateTrailDark from "$lib/assets/svgs/empty_states/empty_state_trail_dark.svg";
@@ -168,7 +171,7 @@
             const r = await searchTrails(q, {
                 filter: `author = ${$currentUser?.actor} OR public = true`,
                 sort: ["name:desc"],
-                limit: 3,
+                limit: trailsSearchLimit,
             });
 
             searchDropdownItems = r

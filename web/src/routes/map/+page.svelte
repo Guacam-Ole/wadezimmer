@@ -30,8 +30,11 @@
     import { getIconForLocation } from "$lib/util/icon_util";
     import type { Snapshot } from "@sveltejs/kit";
     import * as M from "maplibre-gl";
+    import { env } from "$env/dynamic/public";
     import { _ } from "svelte-i18n";
     import { slide } from "svelte/transition";
+
+    let trailsSearchLimit = Number(env.PUBLIC_TRAILS_SEARCH_LIMIT) || 3;
 
     let trails: Trail[] = $state([]);
 
@@ -83,7 +86,7 @@
                     indexUid: "trails",
                     attributesToRetrieve: defaultTrailSearchAttributes,
                     q: q,
-                    limit: 3,
+                    limit: trailsSearchLimit,
                 },
                 {
                     indexUid: "lists",

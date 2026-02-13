@@ -12,3 +12,7 @@ build*.sh
 start*.*
 
 data*/
+/.run/Web Dev Server.run.xml
+/.idea/runConfigurations/Web_Dev_Server.xml
+/web/static/md/custom
+/web/.run/
