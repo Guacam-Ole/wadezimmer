@@ -1,7 +1,7 @@
 {
   "name": "docs",
   "type": "module",
-  "version": "0.18.4-wz-configtracks",
+  "version": "0.18.4-wz6",
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",

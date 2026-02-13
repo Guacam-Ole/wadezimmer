@@ -1,6 +1,6 @@
 {
   "name": "wanderer",
-  "version": "0.18.4-wz-configtracks",
+  "version": "0.18.4-wz6",
   "private": true,
   "scripts": {
     "dev": "vite dev",
