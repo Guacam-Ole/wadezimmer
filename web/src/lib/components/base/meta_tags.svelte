@@ -449,7 +449,7 @@
         {#if openGraph.description || description}
             <meta
                 property="og:description"
-                content={stripHtml(openGraph.description || description)}
+                content={stripHtml(openGraph.description || description || "")}
             />
         {/if}
 
