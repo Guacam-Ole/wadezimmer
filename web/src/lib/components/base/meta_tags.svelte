@@ -202,6 +202,10 @@
         additionalLinkTags = undefined,
     }: Partial<MetaTagsProps> = $props();
 
+    let stripHtml = (html: string): string => {
+        return html.replace(/<[^>]*>/g, "").trim();
+    };
+
     let updatedTitle = $derived(
         titleTemplate
             ? title
@@ -249,7 +253,7 @@
     {/if}
 
     {#if description}
-        <meta name="description" content={description} />
+        <meta name="description" content={stripHtml(description)} />
     {/if}
 
     {#if canonical}
@@ -445,7 +449,7 @@
         {#if openGraph.description || description}
             <meta
                 property="og:description"
-                content={openGraph.description || description}
+                content={stripHtml(openGraph.description || description)}
             />
         {/if}
 
