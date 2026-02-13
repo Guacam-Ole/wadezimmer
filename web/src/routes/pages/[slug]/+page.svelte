@@ -37,12 +37,10 @@
 </svelte:head>
 
 <section
-    class="grid grid-cols-1 lg:grid-cols-2 md:px-8 gap-4 md:gap-8"
-    style="min-height: calc(100vh - 112px)"
+    class="grid grid-cols-1 lg:grid-cols-2 md:px-8 gap-4 md:gap-8 min-h-[calc(100vh-112px)]"
 >
     <div
-        class="flex flex-col justify-center gap-8 px-8 md:px-24 mt-0 lg:sticky"
-        style="max-height: calc(100vh - 112px); top: 112px;"
+        class="flex flex-col gap-8 px-8 md:px-24 py-8"
     >
         <h2 class="text-4xl md:text-5xl font-bold mt-1 mb-8">
             {title}

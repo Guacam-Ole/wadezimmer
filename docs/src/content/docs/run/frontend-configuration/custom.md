@@ -31,9 +31,10 @@ docker compose restart web
 
  ### Installed from source
 1. Navigate to the `web/build/client/md/` directory.
-2. Create the subfolders and files here
-3. Save the file.
-4. No rebuild is required — the file is loaded dynamically at runtime.
+2. Create a subfolder "custom"
+3. Create the subfolders per language and files here
+4. Save the file.
+5. No rebuild is required — the file is loaded dynamically at runtime.
 
 ## Creating the folder structure
 
@@ -42,14 +43,15 @@ An example folder structure can look like this (Example is assuming you use Dock
 ```
 data/
 ├── about.md
-├── de
-│   ├── Kontakt.md
-│   ├── Nachrichten.md
-│   └── Umfrage.md
-└── en
-    ├── Contact.md
-    ├── News.md
-    └── Survey.md
+├── custom
+│   ├── de
+│       ├── Kontakt.md
+│       ├── Nachrichten.md
+│       └── Umfrage.md
+│   └── en
+│       ├── Contact.md
+│       ├── News.md
+        └── Survey.md
 ```
 
 Now the visitor will see the according contents if the langage is set to german (de) or englisch (en)
