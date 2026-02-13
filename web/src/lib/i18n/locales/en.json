@@ -434,5 +434,7 @@
   "welcome_to": "Welcome to",
   "width": "Width",
   "wrong-username-or-password": "Wrong username or password",
-  "you-can": "You can"
+  "you-can": "You can",
+  "email-already-taken": "That email is already taken",
+  "username-already-taken": "That username is already taken"
 }
