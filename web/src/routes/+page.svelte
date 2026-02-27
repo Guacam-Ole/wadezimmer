@@ -26,6 +26,7 @@
     import { Canvas } from "@threlte/core";
     import { marked } from "marked";
     import { onMount, untrack } from "svelte";
+    import { env } from "$env/dynamic/public";
     import { _ } from "svelte-i18n";
 
     let trailsSearchLimit = Number(env.PUBLIC_TRAILS_SEARCH_LIMIT) || 3;
