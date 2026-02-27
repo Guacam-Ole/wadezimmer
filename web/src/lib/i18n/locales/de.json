@@ -434,5 +434,7 @@
   "welcome_to": "Willkommen bei",
   "width": "Breite",
   "wrong-username-or-password": "Falscher Nutzername oder falsches Passwort",
-  "you-can": "Du kannst"
+  "you-can": "Du kannst",
+  "email-already-taken": "Diese Email wird bereits verwendet",
+  "username-already-taken": "Dieser Nutzername wird bereits verwendet"
 }

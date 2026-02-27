@@ -59,11 +59,18 @@
             loading = true;
             try {
                 await users_create(newUser);
-            } catch (e) {
+            } catch (e: any) {
+                let text = $_("error-creating-user");
+                const data = e?.detail?.data;
+                if (data?.email?.code === "validation_not_unique") {
+                    text = $_("email-already-taken");
+                } else if (data?.username?.code === "validation_not_unique") {
+                    text = $_("username-already-taken");
+                }
                 show_toast({
                     icon: "close",
                     type: "error",
-                    text: $_("error-creating-user"),
+                    text,
                 });
                 return;
             } finally {
@@ -98,7 +105,7 @@
 </script>
 
 <svelte:head>
-    <title>{$_("register")} | wanderer</title>
+    <title>{$_("register")} | {page.data.appTitle}</title>
 </svelte:head>
 <main class="flex justify-center">
     <form
