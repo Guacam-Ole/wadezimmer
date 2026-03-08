@@ -1,4 +1,4 @@
-# gh workflow run release_request.yaml --ref localworkflow -f version=0.18.4-wz -R Guacam-Ole/wadezimmer  
+# Hint: Start in cli with  gh workflow run wadezimmer-release.yaml --ref workflow -f version=0.1.0-wadezimmer 
 
 name: Release Workflow for Wadezimmer. DO NOT ADD TO PR!
 
@@ -18,8 +18,11 @@ jobs:
       version: ${{ steps.set_version.outputs.version }}
 
     steps:
-      - uses: actions/checkout@v6
-      
+      # 1. Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      # 2. Setup node & npm
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -93,9 +96,6 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: [versioning, docker-build]
-    permissions:
-       contents: write
-
 
     steps:
       # 1. Checkout the repository
