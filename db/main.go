@@ -1122,16 +1122,24 @@ func registerRoutes(se *core.ServeEvent, client meilisearch.ServiceManager) {
 			userId := e.Auth.Id
 			userActor, err := e.App.FindFirstRecordByData("activitypub_actors", "user", e.Auth.Id)
 			if err != nil {
-				return err
-			}
-
-			searchRules = map[string]any{
-				"lists": map[string]string{
-					"filter": "public = true OR author = " + userActor.Id + " OR shares = " + userId,
-				},
-				"trails": map[string]string{
-					"filter": "public = true OR author = " + userActor.Id + " OR shares = " + userId,
-				},
+				// No activitypub actor found for user — fall back to user-id based rules
+				searchRules = map[string]any{
+					"lists": map[string]string{
+						"filter": "public = true OR author = " + userId + " OR shares = " + userId,
+					},
+					"trails": map[string]string{
+						"filter": "public = true OR author = " + userId + " OR shares = " + userId,
+					},
+				}
+			} else {
+				searchRules = map[string]any{
+					"lists": map[string]string{
+						"filter": "public = true OR author = " + userActor.Id + " OR shares = " + userId,
+					},
+					"trails": map[string]string{
+						"filter": "public = true OR author = " + userActor.Id + " OR shares = " + userId,
+					},
+				}
 			}
 		}
 
