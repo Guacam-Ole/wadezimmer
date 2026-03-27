@@ -25,6 +25,7 @@ import (
 
 	"pocketbase/commands"
 	"pocketbase/federation"
+	"pocketbase/integrations/hammerhead"
 	"pocketbase/integrations/komoot"
 	"pocketbase/integrations/strava"
 
@@ -99,6 +100,7 @@ func registerMigrations(app *pocketbase.PocketBase) {
 
 func setupEventHandlers(app *pocketbase.PocketBase, client meilisearch.ServiceManager) {
 	app.OnRecordAfterCreateSuccess("users").BindFunc(createUserHandler(client))
+	app.OnRecordAfterUpdateSuccess("users").BindFunc(updateUserHandler(client))
 
 	app.OnRecordAfterCreateSuccess("trails").BindFunc(createTrailHandler(client))
 	app.OnRecordAfterUpdateSuccess("trails").BindFunc(updateTrailHandler(client))
@@ -218,6 +220,47 @@ func createUserHandler(client meilisearch.ServiceManager) func(e *core.RecordEve
 		e.Record.Set("token", token)
 		if err := e.App.Save(e.Record); err != nil {
 			return err
+		}
+
+		return e.Next()
+	}
+}
+
+func updateUserHandler(client meilisearch.ServiceManager) func(e *core.RecordEvent) error {
+	return func(e *core.RecordEvent) error {
+		actor, err := e.App.FindFirstRecordByData("activitypub_actors", "user", e.Record.Id)
+		if err != nil {
+			return e.Next()
+		}
+
+		icon := ""
+		origin := os.Getenv("ORIGIN")
+		if origin != "" && e.Record.GetString("avatar") != "" {
+			icon = fmt.Sprintf("%s/api/v1/files/_pb_users_auth_/%s/%s", origin, e.Record.Id, e.Record.GetString("avatar"))
+		}
+		actor.Set("icon", icon)
+		if err := e.App.Save(actor); err != nil {
+			return err
+		}
+
+		trails, err := e.App.FindRecordsByFilter("trails", "author={:author}", "", -1, 0, dbx.Params{"author": actor.Id})
+		if err != nil {
+			return err
+		}
+		if len(trails) > 0 {
+			if err := util.IndexTrails(e.App, trails, client); err != nil {
+				return err
+			}
+		}
+
+		lists, err := e.App.FindRecordsByFilter("lists", "author={:author}", "", -1, 0, dbx.Params{"author": actor.Id})
+		if err != nil {
+			return err
+		}
+		if len(lists) > 0 {
+			if err := util.IndexLists(e.App, lists, client); err != nil {
+				return err
+			}
 		}
 
 		return e.Next()
@@ -816,8 +859,9 @@ func updateIntegrationHandler() func(e *core.RecordEvent) error {
 }
 func censorIntegrationSecrets(r *core.Record) error {
 	secrets := map[string][]string{
-		"strava": {"clientSecret", "refreshToken", "accessToken", "expiresAt"},
-		"komoot": {"password"},
+		"strava":     {"clientSecret", "refreshToken", "accessToken", "expiresAt"},
+		"komoot":     {"password"},
+		"hammerhead": {"password"},
 	}
 	for key, secretKeys := range secrets {
 		if integrationString := r.GetString(key); integrationString != "" {
@@ -849,8 +893,9 @@ func encryptIntegrationSecrets(app core.App, r *core.Record) error {
 	}
 
 	secrets := map[string][]string{
-		"strava": {"clientSecret", "refreshToken", "accessToken", "expiresAt"},
-		"komoot": {"password"},
+		"strava":     {"clientSecret", "refreshToken", "accessToken", "expiresAt"},
+		"komoot":     {"password"},
+		"hammerhead": {"password"},
 	}
 
 	original, _ := app.FindRecordById("integrations", r.Id)
@@ -1172,6 +1217,28 @@ func registerRoutes(se *core.ServeEvent, client meilisearch.ServiceManager) {
 		return e.JSON(http.StatusOK, nil)
 	})
 
+	se.Router.POST("/integration/hammerhead/upload", func(e *core.RequestEvent) error {
+		h, err := loginHammerhead(e)
+		if err != nil {
+			return err
+		}
+
+		if err := h.UploadActivities(e); err != nil {
+			return err
+		}
+
+		return e.JSON(http.StatusOK, nil)
+	})
+
+	se.Router.GET("/integration/hammerhead/login", func(e *core.RequestEvent) error {
+		_, err := loginHammerhead(e)
+		if err != nil {
+			return err
+		}
+
+		return e.JSON(http.StatusOK, nil)
+	})
+
 	se.Router.GET("/integration/komoot/login", func(e *core.RequestEvent) error {
 		encryptionKey := os.Getenv("POCKETBASE_ENCRYPTION_KEY")
 		if len(encryptionKey) == 0 {
@@ -1347,7 +1414,57 @@ func registerCronJobs(app core.App) {
 			fmt.Println(warning)
 			app.Logger().Error(warning)
 		}
+		err = hammerhead.SyncHammerhead(app)
+		if err != nil {
+			warning := fmt.Sprintf("Error syncing with hammerhead: %v", err)
+			fmt.Println(warning)
+			app.Logger().Error(warning)
+		}
 	})
+}
+
+func loginHammerhead(e *core.RequestEvent) (*hammerhead.HammerheadApi, error) {
+
+	encryptionKey := os.Getenv("POCKETBASE_ENCRYPTION_KEY")
+	if len(encryptionKey) == 0 {
+		return nil, apis.NewBadRequestError("POCKETBASE_ENCRYPTION_KEY not set", nil)
+	}
+
+	userId := ""
+	if e.Auth != nil {
+		userId = e.Auth.Id
+	}
+
+	integrations, err := e.App.FindAllRecords("integrations", dbx.NewExp("user = {:id}", dbx.Params{"id": userId}))
+	if err != nil {
+		return nil, err
+	}
+	if len(integrations) == 0 {
+		return nil, apis.NewBadRequestError("user has no integration", nil)
+	}
+	integration := integrations[0]
+	hammerheadString := integration.GetString("hammerhead")
+	if len(hammerheadString) == 0 {
+		return nil, apis.NewBadRequestError("hammerhead integration missing", nil)
+	}
+	var hammerheadIntegration hammerhead.HammerheadIntegration
+	err = json.Unmarshal([]byte(hammerheadString), &hammerheadIntegration)
+	if err != nil {
+		return nil, err
+	}
+	decryptedPassword, err := security.Decrypt(hammerheadIntegration.Password, encryptionKey)
+	if err != nil {
+		return nil, err
+	}
+
+	k := &hammerhead.HammerheadApi{}
+
+	err = k.Login(hammerheadIntegration.Email, string(decryptedPassword))
+	if err != nil {
+		return nil, apis.NewUnauthorizedError("invalid credentials", nil)
+	}
+
+	return k, e.JSON(http.StatusOK, nil)
 }
 
 func bootstrapData(app core.App, client meilisearch.ServiceManager) error {
