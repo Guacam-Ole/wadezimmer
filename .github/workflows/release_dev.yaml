@@ -12,12 +12,12 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
@@ -42,5 +42,5 @@ jobs:
 
       - name: Build Docker Images
         run: |
-          docker buildx build db/ --no-cache -t ghcr.io/open-wanderer/wanderer-db:dev --platform=linux/amd64,linux/arm64 --push
-          docker buildx build web/ --no-cache -t ghcr.io/open-wanderer/wanderer-web:dev --platform=linux/amd64,linux/arm64 --push
+          docker buildx build db/ --no-cache -t ghcr.io/open-wanderer/wanderer-db:dev --push
+          docker buildx build web/ --no-cache -t ghcr.io/open-wanderer/wanderer-web:dev --push
