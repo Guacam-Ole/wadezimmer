@@ -151,6 +151,7 @@
 
 <svelte:head>
     <title>Home | {page.data.appTitle}</title>
+    <meta property="og:image" content="/og-image.png" />
 </svelte:head>
 
 <svelte:window onscroll={onScroll} />
