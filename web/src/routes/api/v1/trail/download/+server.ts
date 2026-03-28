@@ -44,8 +44,8 @@ async function fetchBikerouterGpx(url: string): Promise<Response> {
     // BRouter API uses pipe separator instead of semicolon
     const apiLonlats = lonlats.split(';').join('|');
 
-    const apiUrl = `https://bikerouter.de/brouter?lonlats=${encodeURIComponent(apiLonlats)}&profile=${encodeURIComponent(profile)}&alternativeidx=0&format=gpx`;
-    const gpxResponse = await fetch(apiUrl);
+      const apiUrl = `https://brouter.m11n.de/brouter-engine?lonlats=${encodeURIComponent(apiLonlats)}&profile=${encodeURIComponent(profile)}&alternativeidx=0&format=gpx`;
+    const gpxResponse = await fetch(apiUrl, { redirect: 'follow' });
 
     if (!gpxResponse.ok) {
         throw new Error(`BRouter API error: ${gpxResponse.statusText}`);
