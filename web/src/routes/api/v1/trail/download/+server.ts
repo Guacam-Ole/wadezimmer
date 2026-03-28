@@ -15,10 +15,14 @@ function isBikerouterUrl(url: string): boolean {
 async function fetchBikerouterGpx(url: string): Promise<Response> {
     let bikerouterUrl = url;
 
-    // Follow redirect for short URLs (bkrtr.de) to get the full bikerouter.de URL
+    // Follow redirect for short URLs (bkrtr.de) to get the full bikerouter.de URL with hash
     if (new URL(url).hostname === 'bkrtr.de') {
-        const response = await fetch(url, { redirect: 'follow' });
-        bikerouterUrl = response.url;
+        const response = await fetch(url, { redirect: 'manual' });
+        const location = response.headers.get('Location');
+        if (!location) {
+            throw new Error('Could not resolve bkrtr.de short URL - no Location header in redirect');
+        }
+        bikerouterUrl = location;
     }
 
     // Parse hash fragment for lonlats and profile
@@ -75,6 +79,7 @@ export async function POST(event: RequestEvent) {
             },
         });
     } catch (e) {
-        return handleError(e)
+        console.error('[download]', e);
+        return handleError(e instanceof Error ? e.message : e)
     }
 }
