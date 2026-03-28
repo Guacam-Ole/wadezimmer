@@ -146,7 +146,7 @@
         <input
             type="file"
             id="trail-input"
-            accept=".gpx,.GPX,.tcx,.TCX,.kml,.KML,.fit,.FIT"
+            accept=".gpx,.GPX,.tcx,.TCX,.kml,.KML,.fit,.FIT,application/gpx+xml,application/xml,text/xml,application/vnd.google-earth.kml+xml,application/octet-stream"
             multiple={false}
             style="display: none;"
             onchange={() => handleTrailSelection()}
