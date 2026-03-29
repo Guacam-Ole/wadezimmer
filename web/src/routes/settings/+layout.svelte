@@ -23,6 +23,7 @@
         { text: $_("map"), value: "/settings/map" },
         { text: $_("integrations"), value: "/settings/integrations" },
         { text: `${$_("import")}/${$_("export")}`, value: "/settings/export" },
+        { text: $_("statistics"), value: "/settings/stats" },
         {
             text: $_("help"),
             value: "https://wanderer.to/run/installation",
