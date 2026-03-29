@@ -36,6 +36,7 @@
         { text: $_("trail", { values: { n: 2 } }), value: "/trails" },
         { text: $_("map"), value: "/map" },
         { text: $_("list", { values: { n: 2 } }), value: "/lists" },
+        { text: $_("statistics"), value: "/stats" },
     ];
 
     const dropdownItems = [
@@ -86,6 +87,9 @@
                 break;
             case "/lists/[[handle]]/[[id]]":
                 childPosition = 4;
+                break;
+            case "/stats":
+                childPosition = 5;
                 break;
             default:
                 break;

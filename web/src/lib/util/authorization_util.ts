@@ -5,6 +5,7 @@ const privateRoutes = [
   "/settings",
   "/trail/edit/new",
   "/lists/edit/new",
+  "/stats",
 ]
 
 const publicRoutes = [
