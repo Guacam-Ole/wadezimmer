@@ -1,6 +1,6 @@
 {
   "name": "wanderer",
-  "version": "0.18.5-wz13",
+  "version": "0.18.5-wz14",
   "private": true,
   "scripts": {
     "dev": "vite dev",
