@@ -62,7 +62,6 @@
     );
 
     const labels = byMonth.map((s) => s.month);
-
     const totalDistanceKm = Math.round((totals.totalDistanceM ?? 0) / 1000);
 
     // Cumulative distance in km
@@ -71,6 +70,21 @@
     for (const s of byMonth) {
         cum += (s.newDistanceM ?? 0) / 1000;
         cumDistances.push(Math.round(cum));
+    }
+
+    // Fun distance comparisons
+    const EARTH_CIRCUMFERENCE_KM = 40_075;
+    const MOON_DISTANCE_KM = 384_400;
+    const SUN_DISTANCE_KM = 149_600_000;
+
+    const timesAroundEarth = totalDistanceKm / EARTH_CIRCUMFERENCE_KM;
+    const timesToMoon = totalDistanceKm / MOON_DISTANCE_KM;
+    const timesToSun = totalDistanceKm / SUN_DISTANCE_KM;
+
+    function formatTimes(n: number): string {
+        if (n >= 100) return Math.round(n).toLocaleString();
+        if (n >= 10) return n.toFixed(1);
+        return n.toFixed(2);
     }
 
     const trailsChartData = {
@@ -134,7 +148,7 @@
     <title>{$_("statistics")} | {page.data.appTitle}</title>
 </svelte:head>
 
-<div class="space-y-6">
+<div class="max-w-6xl mx-auto px-4 py-8 space-y-6">
     <h2 class="text-2xl font-bold">
         <i class="fa fa-chart-line mr-3"></i>{$_("instance-stats")}
     </h2>
@@ -152,16 +166,6 @@
             class="flex flex-col items-center gap-2 border border-input-border rounded-xl p-6"
         >
             <span class="text-gray-500 text-sm font-semibold self-start"
-                ><i class="fa fa-user-check mr-2"></i>{$_(
-                    "users-with-trails",
-                )}</span
-            >
-            <p class="text-3xl font-bold">{totals.usersWithTrails}</p>
-        </div>
-        <div
-            class="flex flex-col items-center gap-2 border border-input-border rounded-xl p-6"
-        >
-            <span class="text-gray-500 text-sm font-semibold self-start"
                 ><i class="fa fa-route mr-2"></i>{$_("trail", {
                     values: { n: 2 },
                 })}</span
@@ -174,16 +178,51 @@
             </p>
         </div>
         <div
-            class="flex flex-col items-center gap-2 border border-input-border rounded-xl p-6 col-span-2 lg:col-span-3"
+            class="flex flex-col items-center gap-2 border border-input-border rounded-xl p-6 col-span-2 lg:col-span-1"
         >
             <span class="text-gray-500 text-sm font-semibold self-start"
-                ><i class="fa fa-left-right mr-2"></i>{$_(
-                    "total-distance",
-                )}</span
+                ><i class="fa fa-left-right mr-2"></i>{$_("total-distance")}</span
             >
             <p class="text-3xl font-bold">{totalDistanceKm.toLocaleString()} km</p>
         </div>
     </div>
+
+    {#if timesAroundEarth >= 1 || timesToMoon >= 1 || timesToSun >= 1}
+        <div class="border border-input-border rounded-xl p-6 space-y-3">
+            <span class="text-gray-500 font-semibold text-lg"
+                ><i class="fa fa-earth-europe mr-3"></i>{$_("distance-fun-facts")}</span
+            >
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                {#if timesAroundEarth >= 1}
+                    <div class="flex items-center gap-4">
+                        <span class="text-4xl">🌍</span>
+                        <div>
+                            <p class="text-2xl font-bold">{formatTimes(timesAroundEarth)}×</p>
+                            <p class="text-sm text-gray-500">{$_("times-around-earth")}</p>
+                        </div>
+                    </div>
+                {/if}
+                {#if timesToMoon >= 1}
+                    <div class="flex items-center gap-4">
+                        <span class="text-4xl">🌙</span>
+                        <div>
+                            <p class="text-2xl font-bold">{formatTimes(timesToMoon)}×</p>
+                            <p class="text-sm text-gray-500">{$_("times-to-moon")}</p>
+                        </div>
+                    </div>
+                {/if}
+                {#if timesToSun >= 1}
+                    <div class="flex items-center gap-4">
+                        <span class="text-4xl">☀️</span>
+                        <div>
+                            <p class="text-2xl font-bold">{formatTimes(timesToSun)}×</p>
+                            <p class="text-sm text-gray-500">{$_("times-to-sun")}</p>
+                        </div>
+                    </div>
+                {/if}
+            </div>
+        </div>
+    {/if}
 
     {#if byMonth.length > 0}
         <div class="border border-input-border rounded-xl p-6 space-y-3">
@@ -202,9 +241,7 @@
 
         <div class="border border-input-border rounded-xl p-6 space-y-3">
             <span class="text-gray-500 font-semibold text-lg"
-                ><i class="fa fa-left-right mr-3"></i>{$_(
-                    "cumulative-distance",
-                )} (km)</span
+                ><i class="fa fa-left-right mr-3"></i>{$_("total-distance")} (km)</span
             >
             <Line data={distanceChartData} options={lineOptions} />
         </div>
