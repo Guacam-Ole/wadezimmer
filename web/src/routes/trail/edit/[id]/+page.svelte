@@ -1230,7 +1230,7 @@
             type="file"
             name="gpx"
             id="fileInput"
-            accept=".gpx,.GPX,.tcx,.TCX,.kml,.KML,.kmz,.KMZ,.fit,.FIT"
+            accept=".gpx,.GPX,.tcx,.TCX,.kml,.KML,.kmz,.KMZ,.fit,.FIT,application/gpx+xml,application/xml,text/xml,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,application/octet-stream"
             style="display: none;"
             onchange={handleFileSelection}
         />
