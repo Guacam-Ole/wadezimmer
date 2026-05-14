@@ -45,9 +45,6 @@ func RemoteTrailGet(e *core.RequestEvent) error {
 		// Construct the IRI first to see if we already know this trail.
 		record, err = findLocalTrailByRemoteInfo(e, ctx, handle, trailID)
 		if err != nil {
-			if errors.Is(err, federation.ErrProfilePrivate) {
-				return e.NotFoundError("profile is private", err)
-			}
 			return e.InternalServerError("Failed to resolve trail", err)
 		}
 
@@ -91,9 +88,15 @@ func RemoteTrailGet(e *core.RequestEvent) error {
 }
 
 func findLocalTrailByRemoteInfo(e *core.RequestEvent, ctx context.Context, handle, trailID string) (*core.Record, error) {
-	// 1. Get Actor to build the IRI
+	// 1. Get Actor to build the IRI.
+	// ErrProfilePrivate is OK here: the actor record is still returned and
+	// trail visibility is enforced separately via CanAccessRecord (ViewRule).
+	// A private profile must not hide that user's public trails.
 	actor, err := federation.GetActorByHandle(e.App, ctx, handle, false)
-	if err != nil {
+	if err != nil && !errors.Is(err, federation.ErrProfilePrivate) {
+		return nil, err
+	}
+	if actor == nil {
 		return nil, err
 	}
 
