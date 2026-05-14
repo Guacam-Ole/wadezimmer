@@ -3,7 +3,6 @@ package routes
 import (
 	"net/http"
 
-	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -25,10 +24,6 @@ type statsTotals struct {
 }
 
 func Stats(e *core.RequestEvent) error {
-	if e.Auth == nil {
-		return apis.NewUnauthorizedError("Unauthorized", nil)
-	}
-
 	var byMonth []statsMonthStat
 	err := e.App.DB().
 		NewQuery(`
