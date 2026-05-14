@@ -28,7 +28,7 @@ export default defineConfig({
         {
           base: 'api-reference',
           label: 'API Reference',
-          schema: 'wanderer.openapi.yaml',
+          schema: 'wanderer.openapi.json',
           sidebar: {
             operations: {
               
@@ -54,6 +54,10 @@ export default defineConfig({
         {
           label: 'Summit logs',
           link: '/use/summit-logs/'
+        },
+        {
+          label: 'Merge trails',
+          link: '/use/merge-trails/'
         },
         {
           label: 'Interact with the community',
