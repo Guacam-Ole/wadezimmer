@@ -180,6 +180,7 @@ func registerRoutes(se *core.ServeEvent, client meilisearch.ServiceManager) {
 
 	se.Router.GET("/remote/profile/{handle}/follows", routes.RemoteProfileFollowsList)
 
+	se.Router.GET("/stats", routes.Stats)
 }
 
 func registerCronJobs(app core.App, client meilisearch.ServiceManager) {
