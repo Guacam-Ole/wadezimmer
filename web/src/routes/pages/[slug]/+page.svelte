@@ -2,7 +2,7 @@
     import { page } from "$app/state";
     import { marked } from "marked";
     import { locale } from "svelte-i18n";
-    import Scene from "$lib/components/scene.svelte";
+    import Scene from "$lib/components/3D/scene.svelte";
     import { Canvas } from "@threlte/core";
 
     let content: string = $state("");
