@@ -83,6 +83,10 @@ jobs:
           # Build db image
           docker buildx build db/ --no-cache -t guacamoleee/wanderer-db:$VERSION -t guacamoleee/wanderer-db:latest --platform=linux/amd64,linux/arm64 --push
 
+          # Generate OpenAPI spec so the docs build can pick it up
+          npm --prefix web ci
+          npm --prefix web run openapi:generate
+
           # Build web image
           docker buildx build web/ --no-cache -t guacamoleee/wanderer-web:$VERSION -t guacamoleee/wanderer-web:latest --platform=linux/amd64,linux/arm64 --push
 
