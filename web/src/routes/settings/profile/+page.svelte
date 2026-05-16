@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { page } from "$app/state";
     import Button from "$lib/components/base/button.svelte";
     import Editor from "$lib/components/base/editor.svelte";
     import type { SelectItem } from "$lib/components/base/select.svelte";
