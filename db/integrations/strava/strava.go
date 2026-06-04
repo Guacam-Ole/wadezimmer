@@ -276,7 +276,7 @@ func syncTrailsWithRoutes(app core.App, client meilisearch.ServiceManager, ctx c
 			app.Logger().Warn(fmt.Sprintf("Unable to create trail for route '%s': %v", route.Name, err))
 			continue
 		}
-		err = createWaypointsFromRoute(app, route, user, trailid)
+		err = createWaypointsFromRoute(app, route, actor.Id, trailid)
 		if err != nil {
 			app.Logger().Warn(fmt.Sprintf("Unable to create waypoints for route '%s': %v", route.Name, err))
 			continue
@@ -406,7 +406,7 @@ func createTrailFromRoute(app core.App, route StravaRoute, gpx *filesystem.File,
 	return trailid, err
 }
 
-func createWaypointsFromRoute(app core.App, route StravaRoute, user string, trailid string) error {
+func createWaypointsFromRoute(app core.App, route StravaRoute, actor string, trailid string) error {
 	collection, err := app.FindCollectionByNameOrId("waypoints")
 	if err != nil {
 		return err
@@ -420,7 +420,7 @@ func createWaypointsFromRoute(app core.App, route StravaRoute, user string, trai
 		record.Set("lat", wp.Latlng[0])
 		record.Set("lon", wp.Latlng[1])
 		record.Set("icon", "circle")
-		record.Set("author", user)
+		record.Set("author", actor)
 		record.Set("distance_from_start", wp.DistanceIntoRoute)
 		record.Set("trail", trailid)
 
@@ -452,7 +452,7 @@ func syncTrailsWithActivities(app core.App, client meilisearch.ServiceManager, c
 			app.Logger().Warn(fmt.Sprintf("Unable to fetch GPX for activity '%s': %v", activity.Name, err))
 			continue
 		}
-		trailID, err := createTrailFromActivity(app, detailedActivity, gpx, user, actor.Id, i.Privacy)
+		trailID, err := createTrailFromActivity(app, detailedActivity, gpx, user, actor.Id, i.Privacy, accessToken)
 		if err != nil {
 			app.Logger().Warn(fmt.Sprintf("Unable to create trail from activity '%s': %v", activity.Name, err))
 			continue
@@ -492,7 +492,7 @@ func fetchDetailedActivity(activity StravaActivity, accessToken string) (*Detail
 	return &detailedActivity, nil
 }
 
-func createTrailFromActivity(app core.App, activity *DetailedStravaActivity, gpx *filesystem.File, user string, actor string, privacy string) (string, error) {
+func createTrailFromActivity(app core.App, activity *DetailedStravaActivity, gpx *filesystem.File, user string, actor string, privacy string, accessToken string) (string, error) {
 	if len(activity.StartLatlng) < 2 {
 		return "", nil
 	}
@@ -502,11 +502,19 @@ func createTrailFromActivity(app core.App, activity *DetailedStravaActivity, gpx
 		return "", err
 	}
 
-	var photo *filesystem.File
-	if len(activity.Photos.Primary.Urls.Num600) > 0 {
-		photo, err = fetchActivityPhoto(activity)
+	var photos []*filesystem.File
+	if activity.Photos.Count > 0 {
+		photos, err = fetchActivityPhotos(activity.ID, accessToken)
 		if err != nil {
-			return "", err
+			app.Logger().Warn(fmt.Sprintf("Failed to fetch activity photos for activity %d: %v", activity.ID, err))
+		}
+	}
+
+	// Fallback to primary photo if no photos were fetched but primary URL is available
+	if len(photos) == 0 && len(activity.Photos.Primary.Urls.Num600) > 0 {
+		photo, err := fetchPhotoFromURL(activity.Photos.Primary.Urls.Num600)
+		if err == nil {
+			photos = []*filesystem.File{photo}
 		}
 	}
 
@@ -589,8 +597,8 @@ func createTrailFromActivity(app core.App, activity *DetailedStravaActivity, gpx
 		"author":         actor,
 	})
 
-	if photo != nil {
-		record.Set("photos", photo)
+	if len(photos) > 0 {
+		record.Set("photos", photos)
 	}
 
 	if gpx != nil {
@@ -607,8 +615,8 @@ func createTrailFromActivity(app core.App, activity *DetailedStravaActivity, gpx
 	return record.Id, nil
 }
 
-func fetchActivityPhoto(activity *DetailedStravaActivity) (*filesystem.File, error) {
-	req, err := http.NewRequest("GET", activity.Photos.Primary.Urls.Num600, nil)
+func fetchPhotoFromURL(url string) (*filesystem.File, error) {
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -636,6 +644,50 @@ func fetchActivityPhoto(activity *DetailedStravaActivity) (*filesystem.File, err
 	}
 
 	return photo, nil
+}
+
+func fetchActivityPhotos(activityID int64, accessToken string) ([]*filesystem.File, error) {
+	url := fmt.Sprintf("https://www.strava.com/api/v3/activities/%d/photos?size=600", activityID)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch activity photos: received status %d", resp.StatusCode)
+	}
+
+	var apiPhotos []StravaActivityPhoto
+	if err := json.NewDecoder(resp.Body).Decode(&apiPhotos); err != nil {
+		return nil, err
+	}
+
+	photos := make([]*filesystem.File, 0, len(apiPhotos))
+	for _, apiPhoto := range apiPhotos {
+		photoURL := apiPhoto.Urls.Num600
+		if photoURL == "" {
+			photoURL = apiPhoto.Urls.Num100
+		}
+		if photoURL == "" {
+			continue
+		}
+
+		photo, err := fetchPhotoFromURL(photoURL)
+		if err != nil {
+			continue
+		}
+		photos = append(photos, photo)
+	}
+
+	return photos, nil
 }
 
 func generateActivityGPX(activity *DetailedStravaActivity, accessToken string) (*filesystem.File, error) {
