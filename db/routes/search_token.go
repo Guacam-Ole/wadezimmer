@@ -31,10 +31,10 @@ func SearchToken(client meilisearch.ServiceManager) func(e *core.RequestEvent) e
 			} else {
 				searchRules = map[string]any{
 					"lists": map[string]string{
-						"filter": "public = true OR author = " + userActor.Id + " OR shares = " + userId,
+						"filter": "public = true OR author = " + userActor.Id + " OR shares = " + userActor.Id,
 					},
 					"trails": map[string]string{
-						"filter": "public = true OR author = " + userActor.Id + " OR shares = " + userId,
+						"filter": "public = true OR author = " + userActor.Id + " OR shares = " + userActor.Id,
 					},
 				}
 			}

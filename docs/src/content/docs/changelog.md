@@ -2,6 +2,30 @@
 title: Changelog
 description: What changed in the last patch?
 ---
+## v0.19.2
+### Documentation
+-  Add CONTRIBUTING guidelines
+  
+### Bug Fixes
+- All photos from strava activities are now synced, instead of just the first one
+- Shared trails are now displayed correctly in search results
+- Fixes bug that caused trails to be indexed multiple times causing high server load
+- Remaining likes are no correctly calculated when unliking a trail
+- Fix waypoint creation from photos
+  
+## v0.19.1
+
+### Features
+- Speed improvements for various database queries
+
+### Security
+- Remote lists, remote trails, and remote trail comments now respect the visibility settings and shares of the respective list or trail. (PR #980)
+
+### Bug Fixes
+- Federated remote trails now sync tags and create missing local tags when needed. (PR #987)
+- Private profiles no longer prevent access to a user's own trails; inaccessible private profiles now return a proper `404`. (PR #986)
+- Comment access rules now correctly check the linked comment author via `author.user`. (PR #984)
+
 ## v0.19.0
 
 ### Breaking Changes
