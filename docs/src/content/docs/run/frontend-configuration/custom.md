@@ -20,10 +20,10 @@ If you already configured the use of a custom `about.md` you might have already 
 2. Find the `volumes` section of the `web` container.
 3. Look for the following line (it is commented out by default):
 ```yaml 
- - ./data/:/app/build/client/md/
+ - ./data/custom:/app/build/client/md/custom:ro
  ```
 4. Uncomment the line (remove the `#` at the beginning, if present).
-5. Make sure the left-hand side (`./data/`) points to a valid directory on your host machine containing the custom subfolders. (There should also be a `about.md` file here)
+5. Make sure the left-hand side (`./data/custom`) points to a directory on your host machine containing the per-language subfolders (see the structure below). The `about.md` file is mounted via its own line (see [Edit the "About" section](/run/frontend-configuration/about/)).
 6. Save your changes and restart the container:
 ```bash
 docker compose restart web
