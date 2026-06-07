@@ -145,8 +145,19 @@ func TrailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 		}
 	} else {
 		// this trail exists already
-		// ensure that it is fully synced to catch waypoint/summit log updates
+		if actor.GetBool("isLocal") {
+			// The trail originates from this instance, so our database is
+			// already the source of truth and there is nothing to sync.
+			// Flagging + saving here caused an infinite loop: the save fires
+			// an Update activity that PostActivity also delivers to local
+			// follower inboxes, which re-enters this code path (one save per
+			// local follower per iteration) and floods Meilisearch with
+			// reindex requests until it runs out of file descriptors.
+			return record, nil
+		}
 
+		// remote trail: ensure that it is fully synced to catch
+		// waypoint/summit log updates
 		record.Set("needs_full_sync", true)
 		err = app.Save(record)
 		if err != nil {
@@ -434,8 +445,14 @@ func ListFromActivity(activity pub.Activity, app core.App, actor *core.Record) (
 		}
 	} else {
 		// this list exists already
-		// ensure that it is fully synced to catch trail updates
+		if actor.GetBool("isLocal") {
+			// same as for trails: local lists are authoritative, never
+			// re-flag them when one of our own activities is delivered back
+			// to a local follower inbox
+			return record, nil
+		}
 
+		// remote list: ensure that it is fully synced to catch trail updates
 		record.Set("needs_full_sync", true)
 
 		return record, nil
