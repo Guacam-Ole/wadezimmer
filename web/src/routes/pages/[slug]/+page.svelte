@@ -3,6 +3,8 @@
     import { marked } from "marked";
     import { locale } from "svelte-i18n";
     import Scene from "$lib/components/3D/scene.svelte";
+    import StarSky from "$lib/components/3D/star_sky.svelte";
+    import { theme } from "$lib/stores/theme_store";
     import { Canvas } from "@threlte/core";
 
     let content: string = $state("");
@@ -54,7 +56,25 @@
     class="hidden md:block w-full fixed top-[112px] -z-10"
     style="min-height: calc(100vh - 112px)"
 >
-    <Canvas toneMapping={0}>
-        <Scene></Scene>
-    </Canvas>
+    <div class="invisible dark:visible">
+        <StarSky></StarSky>
+    </div>
+    <div class="absolute h-full w-[60%] left-[40%]">
+        <Canvas toneMapping={0}>
+            <Scene></Scene>
+        </Canvas>
+        {#if $theme === "light"}
+            <enhanced:img
+                class="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 max-h-3/4"
+                src="/static/models/wanderer_diorama_light.png"
+                alt="wanderer Diorama"
+            />
+        {:else}
+            <enhanced:img
+                class="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 max-h-3/4"
+                src="/static/models/wanderer_diorama_dark.png"
+                alt="wanderer Diorama"
+            />
+        {/if}
+    </div>
 </div>
