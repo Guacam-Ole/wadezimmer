@@ -70,7 +70,9 @@ services:
       # PUBLIC_TITLE:
     volumes:
       - ./data/uploads:/app/uploads
-      # - ./data/:/app/build/client/md/
+      # - ./data/about.md:/app/build/client/md/about.md
+      # - ./data/custom:/app/build/client/md/custom
+      
     ports:
       - "3000:3000"
     networks:
