@@ -1,7 +1,7 @@
 {
   "name": "docs",
   "type": "module",
-  "version": "0.19.2-wz2",
+  "version": "0.19.2-wz3",
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
