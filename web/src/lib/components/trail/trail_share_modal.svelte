@@ -23,6 +23,7 @@
         trail_link_share_delete,
         trail_link_share_index,
     } from "$lib/stores/trail_link_share_store";
+    import { handleFromRecordWithIRI } from "$lib/util/activitypub_util";
 
     interface Props {
         trail?: Trail;
@@ -66,7 +67,14 @@
     ];
 
     function copyURLToClipboard() {
-        let link = window.location.href;
+        if (!trail) {
+            return;
+        }
+        // Build the link from the trail itself, not from the current page URL.
+        // The share modal can be opened from anywhere (e.g. a list or the
+        // overview), so window.location.href would produce wrong links such as
+        // /lists?share=<token> that no route resolves.
+        let link = `${window.location.origin}/trail/view/${handleFromRecordWithIRI(trail)}/${trail.id}`;
         if ($linkShares.length > 0) {
             link = link + "?share=" + $linkShares[0].token;
         }

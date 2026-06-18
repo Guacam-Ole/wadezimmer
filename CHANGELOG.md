@@ -3,6 +3,7 @@
 -  Add CONTRIBUTING guidelines
   
 ## Bug Fixes
+- Trail share links now point to the trail itself instead of the page the share dialog was opened from (previously produced broken links like `/lists?share=<token>`)
 - All photos from strava activities are now synced, instead of just the first one
 - Shared trails are now displayed correctly in search results
 - Fixes bug that caused trails to be indexed multiple times causing high server load
