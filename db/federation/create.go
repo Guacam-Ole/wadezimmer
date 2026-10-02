@@ -697,7 +697,8 @@ func processCreateOrUpdateSummitLogActivity(activity pub.Activity, app core.App,
 		} else {
 			photos := []*filesystem.File{}
 			for _, purl := range photoURLs {
-				photo, err := filesystem.NewFileFromURL(context.Background(), purl)
+				photo, cleanup, err := util.DownloadRemoteFile(context.Background(), purl, util.RemotePhotoMaxBytes)
+				defer cleanup()
 				if err != nil {
 					continue
 				}
@@ -710,7 +711,8 @@ func processCreateOrUpdateSummitLogActivity(activity pub.Activity, app core.App,
 		}
 
 		if gpxURL != "" {
-			gpx, err := filesystem.NewFileFromURL(context.Background(), gpxURL)
+			gpx, cleanup, err := util.DownloadRemoteFile(context.Background(), gpxURL, util.RemoteGPXMaxBytes)
+			defer cleanup()
 			if err != nil {
 				return err
 			}

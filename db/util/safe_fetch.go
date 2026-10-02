@@ -46,6 +46,11 @@ type ConnectorHTTPPolicy struct {
 	TLSCABundle  []byte
 }
 
+// HTTPDoer is satisfied by *safeurl.WrappedClient and *http.Client.
+type HTTPDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 func FetchPublicURL(ctx context.Context, rawURL string, maxBytes int64) (*SafeFetchResult, error) {
 	if maxBytes <= 0 {
 		maxBytes = DefaultPluginMediaMaxBytes
