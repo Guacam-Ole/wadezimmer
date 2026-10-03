@@ -357,6 +357,8 @@ func TrailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 		}
 
 		photoURLs := []string{}
+		photoLimit := RemotePhotoLimit(app, "trails")
+		ignoredPhotos := 0
 		gpxURL := ""
 		for _, a := range attachments.Collection() {
 			attachment, err := pub.ToObject(a)
@@ -366,8 +368,16 @@ func TrailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 			if attachment.Type == pub.DocumentType && attachment.MediaType == "application/xml+gpx" {
 				gpxURL = attachment.URL.GetLink().String()
 			} else if attachment.Type == pub.ImageType {
+				if len(photoURLs) >= photoLimit {
+					ignoredPhotos++
+					continue
+				}
 				photoURLs = append(photoURLs, attachment.URL.GetLink().String())
 			}
+		}
+		if ignoredPhotos > 0 {
+			app.Logger().Info("ignoring remote trail photos past the collection limit",
+				"iri", iri, "limit", photoLimit, "ignored", ignoredPhotos)
 		}
 
 		if len(photoURLs) > 0 {

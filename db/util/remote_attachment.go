@@ -1,12 +1,13 @@
 package util
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"net/http"
+	"net/url"
+	"os"
 	"path"
+	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 
@@ -53,43 +54,103 @@ func installedRemoteAttachmentClient() HTTPDoer {
 	return remoteAttachmentClient
 }
 
-// RemotePhotoLimit returns how many photos may be stored on one record of the
-// collection. Task 2 of 07-18 reads the collection's photos maxSelect; until
-// then it always returns RemoteMaxPhotosPerObject and nothing calls it.
+// RemotePhotoLimit returns the maxSelect of the collection's photos field, or
+// RemoteMaxPhotosPerObject if it cannot be read.
 func RemotePhotoLimit(app core.App, collection string) int {
-	return RemoteMaxPhotosPerObject
+	col, err := app.FindCachedCollectionByNameOrId(collection)
+	if err != nil || col == nil {
+		return RemoteMaxPhotosPerObject
+	}
+	field, ok := col.Fields.GetByName("photos").(*core.FileField)
+	if !ok || field == nil {
+		return RemoteMaxPhotosPerObject
+	}
+	if field.MaxSelect > 1 {
+		return field.MaxSelect
+	}
+	return 1
 }
 
-// DownloadRemoteFile downloads rawURL and returns it as a file together with a
-// cleanup function (never nil) that the caller must call once the record has
-// been saved or the activity has failed. Task 2 of 07-18 makes the download
-// safe; today it reproduces filesystem.NewFileFromURL: maxBytes is not yet
-// enforced and there is no deadline.
+var attachmentNameInvalidChars = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
+
+// attachmentFileName derives a file-system-safe name from the URL path,
+// defaulting to "attachment".
+func attachmentFileName(finalURL string) string {
+	name := ""
+	if u, err := url.Parse(finalURL); err == nil {
+		name = path.Base(u.Path)
+	}
+	if name == "." || name == ".." || name == "/" {
+		name = ""
+	}
+	name = attachmentNameInvalidChars.ReplaceAllString(name, "_")
+	if len(name) > 200 {
+		name = name[len(name)-200:]
+	}
+	if name == "" || name == "." || name == ".." {
+		return "attachment"
+	}
+	return name
+}
+
+// DownloadRemoteFile downloads rawURL to a temp file and returns it with a
+// cleanup function (never nil) that removes the temp file.
+//
+// Only public addresses on ports 80 and 443 are fetched, including on
+// redirects, and the body is limited to maxBytes and RemoteAttachmentTimeout.
 func DownloadRemoteFile(ctx context.Context, rawURL string, maxBytes int64) (*filesystem.File, func(), error) {
 	noop := func() {}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if maxBytes <= 0 {
+		return nil, noop, fmt.Errorf("attachment size limit must be positive")
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return nil, noop, fmt.Errorf("attachment URL must be http or https")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, RemoteAttachmentTimeout)
+	defer cancel()
+
+	client := installedRemoteAttachmentClient()
+	if client == nil {
+		client = NewSafeURLClient(RemoteAttachmentTimeout, publicMediaRedirectPolicy)
+	}
+
+	dir, err := os.MkdirTemp("", "wanderer-attachment-*")
 	if err != nil {
 		return nil, noop, err
 	}
-	var client HTTPDoer = http.DefaultClient
-	if c := installedRemoteAttachmentClient(); c != nil {
-		client = c
-	}
-	res, err := client.Do(req)
+	cleanup := func() { _ = os.RemoveAll(dir) }
+
+	payload := filepath.Join(dir, "payload")
+	out, err := os.OpenFile(payload, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
 	if err != nil {
+		cleanup()
 		return nil, noop, err
 	}
-	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode > 399 {
-		return nil, noop, fmt.Errorf("failed to download url %s (%d)", rawURL, res.StatusCode)
+	_, finalURL, err := fetchBoundedTo(ctx, client, rawURL, maxBytes, out)
+	closeErr := out.Close()
+	if err == nil {
+		err = closeErr
 	}
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, res.Body); err != nil {
-		return nil, noop, err
-	}
-	f, err := filesystem.NewFileFromBytes(buf.Bytes(), path.Base(rawURL))
 	if err != nil {
+		cleanup()
 		return nil, noop, err
 	}
-	return f, noop, nil
+
+	named := filepath.Join(dir, attachmentFileName(finalURL))
+	if err := os.Rename(payload, named); err != nil {
+		cleanup()
+		return nil, noop, err
+	}
+	f, err := filesystem.NewFileFromPath(named)
+	if err != nil {
+		cleanup()
+		return nil, noop, err
+	}
+	if f.Size == 0 {
+		cleanup()
+		return nil, noop, fmt.Errorf("cannot create an empty file")
+	}
+	return f, cleanup, nil
 }

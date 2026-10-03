@@ -679,6 +679,8 @@ func processCreateOrUpdateSummitLogActivity(activity pub.Activity, app core.App,
 		}
 
 		photoURLs := []string{}
+		photoLimit := util.RemotePhotoLimit(app, "summit_logs")
+		ignoredPhotos := 0
 		gpxURL := ""
 		for _, a := range attachments.Collection() {
 			attachment, err := pub.ToObject(a)
@@ -688,8 +690,16 @@ func processCreateOrUpdateSummitLogActivity(activity pub.Activity, app core.App,
 			if attachment.Type == pub.DocumentType && attachment.MediaType == "application/xml+gpx" {
 				gpxURL = attachment.URL.GetLink().String()
 			} else if attachment.Type == pub.ImageType {
+				if len(photoURLs) >= photoLimit {
+					ignoredPhotos++
+					continue
+				}
 				photoURLs = append(photoURLs, attachment.URL.GetLink().String())
 			}
+		}
+		if ignoredPhotos > 0 {
+			app.Logger().Info("ignoring remote summit log photos past the collection limit",
+				"iri", logObject.ID.String(), "limit", photoLimit, "ignored", ignoredPhotos)
 		}
 
 		if len(photoURLs) == 0 {
