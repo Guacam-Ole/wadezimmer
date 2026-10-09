@@ -152,6 +152,40 @@ func isPrivateOrReservedIP(ip net.IP) bool {
 	return false
 }
 
+// publicDialContext resolves the host, refuses private or reserved addresses
+// and dials the vetted IP, so a DNS answer cannot change between check and
+// connect.
+func publicDialContext(dialer *net.Dialer, rateLimit bool) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, _ := net.SplitHostPort(addr)
+
+		if rateLimit {
+			identifier, _ := ctx.Value("actor").(string)
+			if identifier == "" {
+				identifier = "system"
+			}
+
+			if err := ActivityPubRateLimiter.CheckRateLimit(identifier, host); err != nil {
+				return nil, err
+			}
+		}
+
+		ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+		if err != nil || len(ips) == 0 {
+			return nil, fmt.Errorf("failed to resolve: %w", err)
+		}
+
+		for _, ip := range ips {
+			if isPrivateOrReservedIP(ip) {
+				return nil, fmt.Errorf("SSRF blocked: %s", ip)
+			}
+		}
+
+		// Standard practice: Dial the first resolved IP to prevent TOCTOU/Rebinding
+		return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].String(), port))
+	}
+}
+
 func SafeHTTPClient() *http.Client {
 	return safeHTTPClientWithTimeouts(30*time.Second, 10*time.Second, 10*time.Second)
 }
@@ -164,32 +198,24 @@ func baseHTTPClientWithTimeouts(total, headers, handshake time.Duration) *http.C
 		Transport: &http.Transport{
 			ResponseHeaderTimeout: headers,
 			TLSHandshakeTimeout:   handshake,
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				host, port, _ := net.SplitHostPort(addr)
+			DialContext:           publicDialContext(dialer, true),
+		},
+	}
+}
 
-				identifier, _ := ctx.Value("actor").(string)
-				if identifier == "" {
-					identifier = "system"
-				}
+// SafeDeliveryClient posts activities to remote inboxes. Inbox URLs come from
+// remote actor documents, so only public addresses are dialed and redirects
+// are not followed. It is not rate limited: fanout to one host is legitimate.
+func SafeDeliveryClient(timeout time.Duration) *http.Client {
+	dialer := &net.Dialer{Timeout: timeout}
 
-				if err := ActivityPubRateLimiter.CheckRateLimit(identifier, host); err != nil {
-					return nil, err
-				}
-
-				ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
-				if err != nil || len(ips) == 0 {
-					return nil, fmt.Errorf("failed to resolve: %w", err)
-				}
-
-				for _, ip := range ips {
-					if isPrivateOrReservedIP(ip) {
-						return nil, fmt.Errorf("SSRF blocked: %s", ip)
-					}
-				}
-
-				// Standard practice: Dial the first resolved IP to prevent TOCTOU/Rebinding
-				return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].String(), port))
-			},
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			DialContext: publicDialContext(dialer, false),
+		},
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
 		},
 	}
 }

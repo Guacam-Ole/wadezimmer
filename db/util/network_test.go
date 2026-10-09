@@ -7,10 +7,14 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/netip"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestFetchPublicURLRejectsUnsafeInputs(t *testing.T) {
@@ -252,5 +256,32 @@ func TestConnectorIPAllowed(t *testing.T) {
 				t.Fatalf("got %v, want %v", got, test.want)
 			}
 		})
+	}
+}
+
+func TestSafeDeliveryClientRefusesLoopback(t *testing.T) {
+	var hits atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+	}))
+	defer server.Close()
+
+	resp, err := SafeDeliveryClient(time.Second).Post(server.URL+"/inbox", "application/activity+json", strings.NewReader("{}"))
+	if err == nil {
+		resp.Body.Close()
+		t.Fatal("expected the loopback delivery to fail")
+	}
+	if !strings.Contains(err.Error(), "SSRF blocked") {
+		t.Fatalf("expected the address to be blocked by policy, got: %v", err)
+	}
+	if n := hits.Load(); n != 0 {
+		t.Fatalf("loopback server received %d requests, want 0", n)
+	}
+}
+
+func TestSafeDeliveryClientDoesNotFollowRedirects(t *testing.T) {
+	redirect := &http.Request{URL: &url.URL{Scheme: "http", Host: "127.0.0.1", Path: "/internal"}}
+	if err := SafeDeliveryClient(time.Second).CheckRedirect(redirect, nil); !errors.Is(err, http.ErrUseLastResponse) {
+		t.Fatalf("CheckRedirect = %v, want http.ErrUseLastResponse", err)
 	}
 }

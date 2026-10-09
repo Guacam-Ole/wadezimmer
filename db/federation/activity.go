@@ -15,15 +15,22 @@ import (
 	pub "github.com/go-ap/activitypub"
 
 	"sync"
+	"sync/atomic"
 
 	"github.com/go-ap/jsonld"
 	"github.com/go-fed/httpsig"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/security"
 	"golang.org/x/sync/semaphore"
+
+	"pocketbase/util"
 )
 
-var httpClient = &http.Client{Timeout: 10 * time.Second}
+var httpClient atomic.Pointer[http.Client]
+
+func init() {
+	httpClient.Store(util.SafeDeliveryClient(10 * time.Second))
+}
 
 // deliveries counts the activities PostActivity is still delivering in the
 // background. WaitForDeliveries lets callers wait for completion. Unlike a
@@ -165,7 +172,7 @@ func PostActivity(app core.App, actor *core.Record, activity *pub.Activity, reci
 					return
 				}
 
-				resp, err := httpClient.Do(req)
+				resp, err := httpClient.Load().Do(req)
 				if err != nil {
 					app.Logger().Error(fmt.Sprintf("Error sending to inbox %s: %s", inbox, err))
 					return
@@ -183,4 +190,11 @@ func PostActivity(app core.App, actor *core.Record, activity *pub.Activity, reci
 		wg.Wait()
 	}()
 	return nil
+}
+
+// SetDeliveryClientForTesting replaces the client PostActivity delivers with
+// and returns a restore function. Tests only.
+func SetDeliveryClientForTesting(c *http.Client) (restore func()) {
+	previous := httpClient.Swap(c)
+	return func() { httpClient.Store(previous) }
 }

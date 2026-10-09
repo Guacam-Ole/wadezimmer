@@ -50,6 +50,7 @@ func newInboxes(t *testing.T) *inboxes {
 		w.WriteHeader(http.StatusAccepted)
 	}))
 	t.Cleanup(in.server.Close)
+	useLoopbackDeliveryClient(t)
 	// A hit at one inbox does not mean all sibling/local deliveries have
 	// finished. Drain them before restoring the client or closing the app.
 	t.Cleanup(func() {
@@ -61,6 +62,13 @@ func newInboxes(t *testing.T) *inboxes {
 	})
 
 	return in
+}
+
+// useLoopbackDeliveryClient lets PostActivity reach httptest servers, which
+// the production delivery client refuses as loopback.
+func useLoopbackDeliveryClient(t *testing.T) {
+	t.Helper()
+	t.Cleanup(SetDeliveryClientForTesting(&http.Client{Timeout: 10 * time.Second}))
 }
 
 func (in *inboxes) url(name string) string {
