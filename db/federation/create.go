@@ -524,18 +524,9 @@ func processCreateOrUpdateCommentActivity(activity pub.Activity, app core.App, a
 		return nil
 	}
 
-	record, err := app.FindFirstRecordByData("comments", "iri", commentObject.ID.String())
+	record, _, err := remoteObjectRecord(app, "comments", commentObject.ID.String(), actor)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			collection, err := app.FindCollectionByNameOrId("comments")
-			if err != nil {
-				return err
-			}
-
-			record = core.NewRecord(collection)
-		} else {
-			return err
-		}
+		return err
 	}
 
 	record.Set("iri", commentObject.ID.String())
@@ -619,20 +610,9 @@ func processCreateOrUpdateSummitLogActivity(activity pub.Activity, app core.App,
 		return nil
 	}
 
-	newSummitLog := false
-	record, err := app.FindFirstRecordByData("summit_logs", "iri", logObject.ID.String())
+	record, newSummitLog, err := remoteObjectRecord(app, "summit_logs", logObject.ID.String(), actor)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			collection, err := app.FindCollectionByNameOrId("summit_logs")
-			if err != nil {
-				return err
-			}
-
-			record = core.NewRecord(collection)
-			newSummitLog = true
-		} else {
-			return err
-		}
+		return err
 	}
 
 	var distance, duration, elevation_gain, elevation_loss float64
@@ -836,6 +816,36 @@ func fetchTrail(app core.App, sender *core.Record, iri string) (*core.Record, er
 
 	activity := pub.ActivityNew(pub.IRI("new"), pub.CreateType, trailObject)
 	return util.TrailFromActivity(*activity, app, author)
+}
+
+// remoteObjectRecord returns the record a remote actor's Create or Update
+// writes to, or a new one if iri is unknown. The object must live on the
+// actor's host, and an existing record must already belong to the actor, so a
+// remote actor can neither overwrite local records nor another actor's.
+func remoteObjectRecord(app core.App, collection, iri string, actor *core.Record) (record *core.Record, isNew bool, err error) {
+	if util.IsLocalIRI(iri) {
+		return nil, false, fmt.Errorf("refusing remote activity referencing local %s %q", collection, iri)
+	}
+	if !sameHost(actor.GetString("iri"), iri) {
+		return nil, false, fmt.Errorf("%s %s is not on the host of actor %s", collection, iri, actor.GetString("iri"))
+	}
+
+	record, err = app.FindFirstRecordByData(collection, "iri", iri)
+	if err == nil {
+		if record.GetString("author") != actor.Id {
+			return nil, false, fmt.Errorf("actor %s is not the author of %s %s", actor.GetString("iri"), collection, iri)
+		}
+		return record, false, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, false, err
+	}
+
+	col, err := app.FindCollectionByNameOrId(collection)
+	if err != nil {
+		return nil, false, err
+	}
+	return core.NewRecord(col), true, nil
 }
 
 func sameHost(a, b string) bool {
