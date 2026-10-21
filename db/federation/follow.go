@@ -135,7 +135,10 @@ func ProcessFollowActivity(app core.App, actor *core.Record, activity pub.Activi
 
 func ProcessAcceptActivity(app core.App, actor *core.Record, activity pub.Activity) error {
 
-	followActivity := activity.Object.(*pub.Activity)
+	followActivity, ok := activity.Object.(*pub.Activity)
+	if !ok || followActivity == nil {
+		return fmt.Errorf("accept object must be a follow activity")
+	}
 
 	follower, err := app.FindFirstRecordByData("activitypub_actors", "iri", followActivity.Actor)
 	if err != nil {

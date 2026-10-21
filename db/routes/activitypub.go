@@ -141,24 +141,7 @@ func ActivitypubActivityProcess(e *core.RequestEvent) error {
 		return e.UnauthorizedError("Invalid http signature", err)
 	}
 
-	switch activity.Type {
-	case pub.FollowType:
-		err = federation.ProcessFollowActivity(e.App, actor, activity)
-	case pub.AcceptType:
-		err = federation.ProcessAcceptActivity(e.App, actor, activity)
-	case pub.UndoType:
-		err = federation.ProcessUndoActivity(e.App, actor, activity)
-	case pub.UpdateType:
-		fallthrough
-	case pub.CreateType:
-		err = federation.ProcessCreateOrUpdateActivity(e.App, actor, recipient, activity)
-	case pub.DeleteType:
-		err = federation.ProcessDeleteActivity(e.App, actor, activity)
-	case pub.AnnounceType:
-		err = federation.ProcessAnnounceActivity(e.App, actor, activity)
-	case pub.LikeType:
-		err = federation.ProcessLikeActivity(e.App, actor, activity)
-	}
+	err = federation.ProcessInboxActivity(e.App, actor, recipient, activity)
 	if err != nil {
 		message := "ActivityPub activity could not be processed"
 		if errors.Is(err, util.ErrNotificationEmailDelivery) {

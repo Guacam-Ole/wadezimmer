@@ -469,7 +469,7 @@ func processCreateOrUpdateTrailActivity(activity pub.Activity, app core.App, act
 		if t.GetType() == pub.MentionType {
 			mention := t.(*pub.Mention)
 			mentionedActor, err := app.FindFirstRecordByData("activitypub_actors", "iri", mention.Href.GetID().String())
-			if err != nil {
+			if err != nil || (actor.GetBool("is_local") && mentionedActor.GetString("inbox") != recipient.GetString("inbox")) {
 				continue
 			}
 			notification := util.Notification{

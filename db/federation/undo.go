@@ -128,7 +128,10 @@ func CreateUnlikeActivity(app core.App, like *core.Record) error {
 }
 
 func ProcessUndoActivity(app core.App, actor *core.Record, activity pub.Activity) error {
-
+	object, ok := activity.Object.(*pub.Activity)
+	if !ok || object == nil {
+		return fmt.Errorf("undo object must be an activity")
+	}
 	if activity.Object.GetType() == pub.FollowType {
 		return processUnfollowActivity(app, actor, activity)
 	} else if activity.Object.GetType() == pub.LikeType {
@@ -144,7 +147,10 @@ func processUnfollowActivity(app core.App, actor *core.Record, activity pub.Acti
 		return nil
 	}
 
-	followActivity := activity.Object.(*pub.Activity)
+	followActivity, ok := activity.Object.(*pub.Activity)
+	if !ok || followActivity == nil {
+		return fmt.Errorf("undo object must be a follow activity")
+	}
 
 	followee, err := app.FindFirstRecordByData("activitypub_actors", "iri", followActivity.Object)
 	if err != nil {
@@ -168,7 +174,10 @@ func processUnlikeActivity(app core.App, actor *core.Record, activity pub.Activi
 		return nil
 	}
 
-	likeActivity := activity.Object.(*pub.Activity)
+	likeActivity, ok := activity.Object.(*pub.Activity)
+	if !ok || likeActivity == nil {
+		return fmt.Errorf("undo object must be a like activity")
+	}
 
 	trail, err := app.FindFirstRecordByData("trails", "iri", likeActivity.Object.GetID().String())
 	if err != nil {
