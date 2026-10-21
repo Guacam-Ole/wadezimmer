@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"pocketbase/federation"
+	"pocketbase/util"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -432,6 +434,108 @@ func TestInboxDeleteKeepsFeedForReusedItemIdentity(t *testing.T) {
 				t.Fatalf("replacement feed removed: %v", err)
 			}
 		})
+	}
+}
+
+// Keep the real Object layout so the library converts this test value to its
+// usual Object. Only the second ID read pauses, after the original's marker
+// check and before its normal handler. No production callback is replaced.
+type orderedInboxObject pub.Object
+
+type orderedInboxObjectPause struct {
+	object          *orderedInboxObject
+	started, resume chan struct{}
+	calls           atomic.Int32
+}
+
+var orderedInboxObjectPaused atomic.Pointer[orderedInboxObjectPause]
+
+func (object *orderedInboxObject) GetID() pub.ID {
+	if pause := orderedInboxObjectPaused.Load(); pause != nil && pause.object == object && pause.calls.Add(1) == 2 {
+		close(pause.started)
+		<-pause.resume
+	}
+	return (*pub.Object)(object).GetID()
+}
+
+func (object *orderedInboxObject) GetLink() pub.IRI { return (*pub.Object)(object).GetLink() }
+func (object *orderedInboxObject) GetType() pub.ActivityVocabularyType {
+	return (*pub.Object)(object).GetType()
+}
+func (object *orderedInboxObject) IsLink() bool       { return (*pub.Object)(object).IsLink() }
+func (object *orderedInboxObject) IsObject() bool     { return (*pub.Object)(object).IsObject() }
+func (object *orderedInboxObject) IsCollection() bool { return (*pub.Object)(object).IsCollection() }
+
+func TestInboxRetractionKeepsFeedForStoredLocalIdentity(t *testing.T) {
+	for _, collection := range []string{"trails", "lists"} {
+		for _, activityType := range []pub.ActivityVocabularyType{pub.CreateType, pub.UpdateType} {
+			t.Run(collection+"/"+string(activityType), func(t *testing.T) {
+				w := newKnownKeyWorld(t)
+				handler := knownKeyInboxRouter(t, w)
+				actor := w.sender(t, "sender", "remote.example", true)
+				kind, feedType := "trail", "trail"
+				if collection == "lists" {
+					kind, feedType = "list", "list"
+				}
+				iri := "https://example.com/api/v1/" + kind + "/morningwalk0001"
+				record := w.save(t, collection, map[string]any{"id": "morningwalk0001", "iri": iri, "author": actor.Id, "name": "Morning walk"})
+				feed := w.save(t, "feed", map[string]any{"actor": w.recipient.Id, "item": record.Id, "type": feedType})
+				if !util.RecordHasLocalIdentity(w.app, record) {
+					t.Fatal("fixture has no stored local identity")
+				}
+				deletion := pub.Activity{ID: "https://remote.example/activities/deletion", Type: pub.DeleteType, Actor: pub.IRI(actor.GetString("iri")), Object: pub.IRI(iri)}
+				if err := federation.ProcessDeleteActivity(w.app, actor, deletion); err == nil {
+					t.Fatal("delete handler accepted the stored local identity")
+				}
+				payload := orderTrail(iri, actor.GetString("iri"))
+				if collection == "lists" {
+					payload.Type, payload.Location = pub.CollectionType, nil
+				}
+				object := (*orderedInboxObject)(payload)
+				converted, err := pub.ToObject(object)
+				if err != nil || converted != payload {
+					t.Fatalf("test value did not convert to the real object: %v", err)
+				}
+				pause := &orderedInboxObjectPause{object: object, started: make(chan struct{}), resume: make(chan struct{})}
+				var finish sync.Once
+				defer finish.Do(func() { close(pause.resume) })
+				orderedInboxObjectPaused.Store(pause)
+				defer orderedInboxObjectPaused.Store(nil)
+				result := make(chan error, 1)
+				original := pub.Activity{Type: activityType, Actor: pub.IRI(actor.GetString("iri")), Object: object}
+				go func() { result <- federation.ProcessInboxActivity(w.app, actor, w.recipient, original) }()
+				select {
+				case <-pause.started:
+				case <-time.After(3 * time.Second):
+					t.Fatal("original did not reach its handler")
+				}
+				status, err := w.deliverOrderedActivity(handler, actor, w.recipient, deletion)
+				if status != http.StatusOK || err != nil {
+					t.Fatalf("signed delete response: %d, %v", status, err)
+				}
+				if _, err := w.app.FindRecordById(collection, record.Id); err != nil {
+					t.Fatalf("rejected signed delete changed own object: %v", err)
+				}
+				if _, err := w.app.FindRecordById("feed", feed.Id); err != nil {
+					t.Fatalf("rejected direct deletion changed feed: %v", err)
+				}
+				finish.Do(func() { close(pause.resume) })
+				select {
+				case err := <-result:
+					if err == nil || !strings.Contains(err.Error(), "origin does not match") {
+						t.Fatalf("original did not reach its normal origin check: %v", err)
+					}
+				case <-time.After(3 * time.Second):
+					t.Fatal("original did not finish")
+				}
+				if _, err := w.app.FindRecordById(collection, record.Id); err != nil {
+					t.Fatalf("stored own object removed: %v", err)
+				}
+				if _, err := w.app.FindRecordById("feed", feed.Id); err != nil {
+					t.Fatalf("rejected original and delete changed feed: %v", err)
+				}
+			})
+		}
 	}
 }
 

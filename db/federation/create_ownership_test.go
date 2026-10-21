@@ -38,6 +38,7 @@ func ownershipCommentUpdate(actorIRI, commentIRI, trailIRI, text string) pub.Act
 	obj := &pub.Object{
 		ID:        pub.IRI(commentIRI),
 		Type:      pub.NoteType,
+		To:        pub.ItemCollection{pub.PublicNS},
 		Content:   ownerText(text),
 		InReplyTo: pub.IRI(trailIRI),
 	}

@@ -457,7 +457,7 @@ func TestProcessDeleteForeignCommentActivity(t *testing.T) {
 		return f, comments
 	}
 
-	foreignIRI := "https://mastodon.example/users/carol/statuses/123"
+	foreignIRI := "https://remote.example/users/carol/statuses/123"
 
 	t.Run("removes the comment", func(t *testing.T) {
 		f, comments := setup(t)
@@ -472,7 +472,7 @@ func TestProcessDeleteForeignCommentActivity(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		activity := pub.DeleteNew(pub.IRI("https://mastodon.example/users/carol/statuses/123#delete"), pub.IRI(foreignIRI))
+		activity := pub.DeleteNew(pub.IRI(foreignIRI+"#delete"), pub.IRI(foreignIRI))
 		activity.Actor = pub.IRI(carol.GetString("iri"))
 		if err := ProcessDeleteActivity(f.app, carol, *activity); err != nil {
 			t.Fatalf("ProcessDeleteActivity: %v", err)

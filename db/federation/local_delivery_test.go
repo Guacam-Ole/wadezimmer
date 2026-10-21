@@ -30,9 +30,8 @@ func TestLocalDeliveryMaintainsFeedFollowLikeAndShareWithoutOriginHTTP(t *testin
 	settings.Fields.Add(&core.TextField{Name: "user"}, &core.JSONField{Name: "notifications"})
 	notifications := core.NewBaseCollection("notifications")
 	notifications.Fields.Add(&core.TextField{Name: "type"}, &core.TextField{Name: "author"}, &core.TextField{Name: "recipient"}, &core.JSONField{Name: "metadata"}, &core.BoolField{Name: "seen"})
-	feed := core.NewBaseCollection("feed")
-	feed.Fields.Add(&core.TextField{Name: "actor"}, &core.TextField{Name: "author"}, &core.TextField{Name: "item"}, &core.TextField{Name: "type"})
-	for _, collection := range []*core.Collection{settings, notifications, feed} {
+
+	for _, collection := range []*core.Collection{settings, notifications} {
 		if err := f.app.Save(collection); err != nil {
 			t.Fatal(err)
 		}

@@ -54,8 +54,8 @@ func deliverLocalActivity(app core.App, sender *core.Record, inbox string, body 
 	if err != nil || !stored.GetBool("is_local") || stored.GetString("iri") != sender.GetString("iri") || stored.GetString("private_key") != sender.GetString("private_key") {
 		return true, fmt.Errorf("local delivery sender is not bound to a local account")
 	}
-	var activity pub.Activity
-	if err := activity.UnmarshalJSON(body); err != nil {
+	activity, err := UnmarshalInboxActivity(body)
+	if err != nil {
 		return true, err
 	}
 	if activity.Actor == nil || activity.Actor.GetID().String() != stored.GetString("iri") {

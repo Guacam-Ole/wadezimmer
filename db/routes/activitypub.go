@@ -169,8 +169,7 @@ func ActivitypubActivityProcess(e *core.RequestEvent) error {
 	if err != nil {
 		return err
 	}
-	var activity pub.Activity
-	err = activity.UnmarshalJSON(body)
+	activity, err := federation.UnmarshalInboxActivity(body)
 	if err != nil {
 		return err
 	}

@@ -28,6 +28,7 @@ func TestIncomingActivitiesExplicitlyBoundRichText(t *testing.T) {
 				`<p onclick="blocked()"><strong>Safe `+strings.Repeat(`'"&山🚲`, 3000)+`</strong></p>`))
 			object.Location = &pub.Place{Name: pub.NaturalLanguageValuesNew(pub.LangRefValueNew(pub.NilLangRef, "Somewhere"))}
 			object.StartTime = time.Now()
+			object.To = pub.ItemCollection{pub.PublicNS}
 			if kind == "comment" || kind == "summit-log" {
 				trail := f.record(t, "trails", map[string]any{"author": author.Id,
 					"iri": "https://remote.example/api/v1/trail/parent", "public": true})

@@ -222,6 +222,17 @@ func IsLocalIRI(iri string) bool {
 	return strings.EqualFold(u.Host, o.Host)
 }
 
+// localActorRecord resolves a local actor's stored record without writing it.
+// Local deliveries only add feed entries and notifications. A non-local IRI
+// must name a record authored by the actor.
+func localActorRecord(app core.App, collection, iri string, actor *core.Record) (*core.Record, error) {
+	record, err := app.FindFirstRecordByData(collection, "iri", iri)
+	if err != nil || IsLocalIRI(iri) || record.GetString("author") == actor.Id {
+		return record, err
+	}
+	return nil, fmt.Errorf("local actor does not own %s %q", collection, iri)
+}
+
 func trailFromActivity(activity pub.Activity, app core.App, actor *core.Record) (*core.Record, error) {
 	t, err := pub.ToObject(activity.Object)
 	if err != nil {
@@ -229,6 +240,11 @@ func trailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 	}
 
 	iri := t.ID.String()
+	if !actor.GetBool("is_local") {
+		if err := ValidateRemoteObjectAuthor(actor, iri, t.AttributedTo); err != nil {
+			return nil, err
+		}
+	}
 
 	// Own content must never be ingested as if it were remote. An inbound
 	// activity referencing one of our own trails (e.g. an announce echoed back)
@@ -236,12 +252,11 @@ func trailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 	// instance fetch itself. Only a local actor may resolve a local object id to
 	// the local record; a remote actor must not be able to reference or attach
 	// side effects (feeds/shares/notifications) to local content by id.
+	if actor.GetBool("is_local") {
+		return localActorRecord(app, "trails", iri, actor)
+	}
 	if IsLocalIRI(iri) {
-		if !actor.GetBool("is_local") {
-			return nil, fmt.Errorf("refusing remote activity referencing local trail %q", iri)
-		}
-
-		return app.FindFirstRecordByData("trails", "iri", iri)
+		return nil, fmt.Errorf("refusing remote activity referencing local trail %q", iri)
 	}
 
 	var record *core.Record
@@ -263,6 +278,9 @@ func trailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 		}
 	} else {
 		// this trail exists already
+		if record.GetString("author") != actor.Id || RecordHasLocalIdentity(app, record) {
+			return nil, fmt.Errorf("inbound trail author does not own the stored object")
+		}
 		// keep searchable category metadata fresh from the update activity while
 		// still requiring a full sync to catch waypoint/summit log updates.
 		categoryMetadata, err := trailCategoryMetadataFromActivityObject(t)
@@ -271,6 +289,9 @@ func trailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 		}
 		if err := applyTrailActivityCategoryMetadata(app, record, categoryMetadata); err != nil {
 			return nil, err
+		}
+		if activity.Type != pub.AnnounceType {
+			record.Set("public", true)
 		}
 
 		record.Set("needs_full_sync", true)
@@ -338,7 +359,8 @@ func trailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 	record.Set("difficulty", diffculty)
 	record.Set("date", t.StartTime.Unix())
 	record.Set("tags", trailTags)
-	record.Set("public", true)
+	// A directed share grants access only to its recipient.
+	record.Set("public", activity.Type != pub.AnnounceType)
 	record.Set("iri", t.ID.String())
 	record.Set("author", actor.Id)
 	record.Set("needs_full_sync", true)
@@ -628,14 +650,18 @@ func listFromActivity(activity pub.Activity, app core.App, actor *core.Record) (
 	}
 
 	iri := l.ID.String()
+	if !actor.GetBool("is_local") {
+		if err := ValidateRemoteObjectAuthor(actor, iri, l.AttributedTo); err != nil {
+			return nil, err
+		}
+	}
 
 	// Own content must never be ingested as if it were remote (see TrailFromActivity).
+	if actor.GetBool("is_local") {
+		return localActorRecord(app, "lists", iri, actor)
+	}
 	if IsLocalIRI(iri) {
-		if !actor.GetBool("is_local") {
-			return nil, fmt.Errorf("refusing remote activity referencing local list %q", iri)
-		}
-
-		return app.FindFirstRecordByData("lists", "iri", iri)
+		return nil, fmt.Errorf("refusing remote activity referencing local list %q", iri)
 	}
 
 	var record *core.Record
@@ -656,6 +682,15 @@ func listFromActivity(activity pub.Activity, app core.App, actor *core.Record) (
 		}
 	} else {
 		// this list exists already
+		if record.GetString("author") != actor.Id || RecordHasLocalIdentity(app, record) {
+			return nil, fmt.Errorf("inbound list author does not own the stored object")
+		}
+		if activity.Type != pub.AnnounceType && !record.GetBool("public") {
+			record.Set("public", true)
+			if err := app.Save(record); err != nil {
+				return nil, err
+			}
+		}
 		// ensure that it is fully synced to catch trail updates
 
 		record.Set("needs_full_sync", true)
@@ -665,7 +700,8 @@ func listFromActivity(activity pub.Activity, app core.App, actor *core.Record) (
 
 	record.Set("name", l.Name.First().Value)
 	record.Set("description", l.Content.First().Value)
-	record.Set("public", true)
+	// A directed share grants access only to its recipient.
+	record.Set("public", activity.Type != pub.AnnounceType)
 	record.Set("iri", iri)
 	record.Set("author", actor.Id)
 	record.Set("needs_full_sync", true)

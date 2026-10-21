@@ -53,9 +53,10 @@ func setupFederatedTagImport(t *testing.T) (*pbtests.TestApp, *core.Collection, 
 	empty := core.NewRecord(tags)
 	save(empty)
 	actors := core.NewBaseCollection("activitypub_actors")
-	actors.Fields.Add(&core.BoolField{Name: "is_local"})
+	actors.Fields.Add(&core.BoolField{Name: "is_local"}, &core.TextField{Name: "iri"})
 	save(actors)
 	actor := core.NewRecord(actors)
+	actor.Set("iri", "https://remote.example/users/author")
 	save(actor)
 	trails := core.NewBaseCollection("trails")
 	trails.Fields.Add(

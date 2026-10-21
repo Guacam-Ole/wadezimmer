@@ -95,6 +95,9 @@ func CreateActorDeleteActivity(app core.App, actor *core.Record, recipients []st
 // trail that was handed out while public is retracted from whoever got it.
 // A trail nobody ever received is not announced at all.
 func CreateTrailDeleteActivity(app core.App, r *core.Record, audience DeleteAudience) error {
+	if iri := r.GetString("iri"); iri != "" && !util.RecordHasLocalIdentity(app, r) {
+		return nil
+	}
 	if !r.GetBool("public") && audience.Empty() {
 		return nil
 	}
@@ -162,6 +165,9 @@ func CreateTrailDeleteActivity(app core.App, r *core.Record, audience DeleteAudi
 }
 
 func CreateCommentDeleteActivity(app core.App, client meilisearch.ServiceManager, r *core.Record) error {
+	if iri := r.GetString("iri"); iri != "" && !util.RecordHasLocalIdentity(app, r) {
+		return nil
+	}
 
 	origin := os.Getenv("ORIGIN")
 	if origin == "" {
@@ -250,6 +256,9 @@ func CreateCommentDeleteActivity(app core.App, client meilisearch.ServiceManager
 }
 
 func CreateSummitLogDeleteActivity(app core.App, r *core.Record) error {
+	if iri := r.GetString("iri"); iri != "" && !util.RecordHasLocalIdentity(app, r) {
+		return nil
+	}
 
 	origin := os.Getenv("ORIGIN")
 	if origin == "" {
@@ -356,6 +365,9 @@ func CreateSummitLogDeleteActivity(app core.App, r *core.Record) error {
 // CreateListDeleteActivity is CreateTrailDeleteActivity for a list, with
 // the audience from ListDeleteRecipients.
 func CreateListDeleteActivity(app core.App, r *core.Record, audience DeleteAudience) error {
+	if iri := r.GetString("iri"); iri != "" && !util.RecordHasLocalIdentity(app, r) {
+		return nil
+	}
 	if !r.GetBool("public") && audience.Empty() {
 		return nil
 	}
@@ -511,7 +523,7 @@ func processDeleteTrailActivity(app core.App, actor *core.Record, activity pub.A
 		return err
 	}
 
-	if trail.GetString("author") != actor.Id {
+	if !inboundRecordCanDelete(app, trail, actor) {
 		return fmt.Errorf("actor is not trail author")
 	}
 	// The object may have appeared after the marker's initial lookup.
@@ -536,7 +548,7 @@ func processDeleteCommentActivity(app core.App, actor *core.Record, activity pub
 		return err
 	}
 
-	if comment.GetString("author") != actor.Id {
+	if !inboundRecordCanDelete(app, comment, actor) {
 		return fmt.Errorf("actor is not comment author")
 	}
 
@@ -555,7 +567,7 @@ func processDeleteSummitLogActivity(app core.App, actor *core.Record, activity p
 		return err
 	}
 
-	if summitLog.GetString("author") != actor.Id {
+	if !inboundRecordCanDelete(app, summitLog, actor) {
 		return fmt.Errorf("actor is not summit log author")
 	}
 
@@ -570,7 +582,7 @@ func processDeleteListActivity(app core.App, actor *core.Record, activity pub.Ac
 		return err
 	}
 
-	if list.GetString("author") != actor.Id {
+	if !inboundRecordCanDelete(app, list, actor) {
 		return fmt.Errorf("actor is not list author")
 	}
 	if key, ordered := inboxOrderKey(app, actor, activity); ordered {
@@ -583,4 +595,9 @@ func processDeleteListActivity(app core.App, actor *core.Record, activity pub.Ac
 	}
 
 	return app.Delete(list)
+}
+
+func inboundRecordCanDelete(app core.App, record, actor *core.Record) bool {
+	return !actor.GetBool("is_local") && record.GetString("author") == actor.Id &&
+		!util.RecordHasLocalIdentity(app, record) && sameHost(record.GetString("iri"), actor.GetString("iri"))
 }

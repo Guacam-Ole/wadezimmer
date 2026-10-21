@@ -15,11 +15,7 @@ func TestInboxDeliveryRecoveryDrainsAndPreservesSiblingDelivery(t *testing.T) {
 	sender := f.actor(t, "sender", true)
 	local := f.actor(t, "local", true)
 	remote := f.actor(t, "remote", false)
-	feed := core.NewBaseCollection("feed")
-	feed.Fields.Add(&core.TextField{Name: "actor"}, &core.TextField{Name: "author"}, &core.TextField{Name: "item"}, &core.TextField{Name: "type"})
-	if err := f.app.Save(feed); err != nil {
-		t.Fatal(err)
-	}
+
 	trail := f.record(t, "trails", map[string]any{"name": "Local trail", "author": sender.Id, "public": true}, "trail")
 	var attempts atomic.Int32
 	f.app.OnRecordCreate("feed").BindFunc(func(e *core.RecordEvent) error {

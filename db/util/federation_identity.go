@@ -1,9 +1,11 @@
 package util
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 
+	pub "github.com/go-ap/activitypub"
 	"github.com/pocketbase/pocketbase/core"
 )
 
@@ -15,6 +17,20 @@ func IRIHasRecordIdentity(iri, collection, id string) bool {
 	return err == nil && kind != "" && id != "" && parsed.Host != "" && parsed.User == nil &&
 		(parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.RawQuery == "" && parsed.Fragment == "" &&
 		parsed.EscapedPath() == parsed.Path && strings.HasSuffix(parsed.Path, "/api/v1/"+kind+"/"+id)
+}
+
+func ValidateRemoteObjectAuthor(actor *core.Record, iri string, attribution pub.Item) error {
+	object, objectErr := url.Parse(iri)
+	signer, signerErr := url.Parse(actor.GetString("iri"))
+	if actor.GetBool("is_local") || objectErr != nil || signerErr != nil || object.User != nil || signer.User != nil ||
+		(object.Scheme != "http" && object.Scheme != "https") || (signer.Scheme != "http" && signer.Scheme != "https") ||
+		object.Host == "" || !strings.EqualFold(object.Host, signer.Host) || IsLocalIRI(iri) {
+		return fmt.Errorf("inbound object origin does not match its author")
+	}
+	if attribution != nil && ItemID(attribution) != actor.GetString("iri") {
+		return fmt.Errorf("inbound object attribution does not match its author")
+	}
+	return nil
 }
 
 // RecordHasLocalIdentity includes objects created before an ORIGIN change.

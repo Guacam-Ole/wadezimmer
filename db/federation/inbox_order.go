@@ -318,7 +318,7 @@ func cleanRetractedInboxFeed(app core.App, actor *core.Record, key inboxRetracti
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	if err == nil && (current.GetString("iri") != key.object || current.GetString("author") != actor.Id) {
+	if err == nil && (current.GetString("iri") != key.object || !inboundRecordCanDelete(app, current, actor)) {
 		return nil
 	}
 	feedType := string(util.TrailFeed)
