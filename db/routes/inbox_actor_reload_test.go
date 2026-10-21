@@ -49,7 +49,7 @@ func TestKnownKeyReloadKeepsFetchResultWithItsRequest(t *testing.T) {
 		select {
 		case err := <-results:
 			var reloadErr *knownInboxActorReloadError
-			if !errors.Is(err, fetchErr) || !errors.As(err, &reloadErr) || reloadErr.claimRefused {
+			if !errors.Is(err, fetchErr) || !errors.As(err, &reloadErr) || reloadErr.claimRefused || reloadErr.waited == reloadErr.fetched {
 				t.Fatalf("shared refresh error: %v", err)
 			}
 			if reloadErr.fetched {
@@ -64,7 +64,7 @@ func TestKnownKeyReloadKeepsFetchResultWithItsRequest(t *testing.T) {
 	}
 	_, err = reloadKnownInboxActor(w.app, ctx, actor)
 	var reloadErr *knownInboxActorReloadError
-	if !errors.Is(err, util.ErrRateLimited) || !errors.As(err, &reloadErr) || !reloadErr.claimRefused || reloadErr.fetched {
+	if !errors.Is(err, util.ErrRateLimited) || !errors.As(err, &reloadErr) || !reloadErr.claimRefused || reloadErr.fetched || reloadErr.waited {
 		t.Fatalf("later refresh claim: %v", err)
 	}
 }

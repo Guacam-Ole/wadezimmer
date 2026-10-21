@@ -35,6 +35,7 @@ type knownKeyOrigin struct {
 	documents   map[string]string
 	requests    map[string]int
 	unavailable map[string]bool
+	statuses    map[string]int
 	held        map[string]<-chan struct{}
 	started     map[string]chan struct{}
 }
@@ -45,7 +46,7 @@ func (o *knownKeyOrigin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if o.requests[r.URL.Path] == 1 && o.started[r.URL.Path] != nil {
 		close(o.started[r.URL.Path])
 	}
-	held, unavailable, document := o.held[r.URL.Path], o.unavailable[r.URL.Path], o.documents[r.URL.Path]
+	held, unavailable, document, status := o.held[r.URL.Path], o.unavailable[r.URL.Path], o.documents[r.URL.Path], o.statuses[r.URL.Path]
 	o.mu.Unlock()
 	if held != nil {
 		select {
@@ -53,6 +54,10 @@ func (o *knownKeyOrigin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		}
+	}
+	if status != 0 {
+		w.WriteHeader(status)
+		return
 	}
 	if unavailable {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -75,6 +80,7 @@ func (o *knownKeyOrigin) count(path string) int {
 type knownKeyWorld struct {
 	app                          *core.BaseApp
 	origin                       *knownKeyOrigin
+	client                       *http.Client
 	recipient                    *core.Record
 	key, previousKey, otherKey   *rsa.PrivateKey
 	publicKey, previousPublicKey string
@@ -137,6 +143,7 @@ func newKnownKeyWorld(t *testing.T, actorTimeout ...time.Duration) *knownKeyWorl
 			}
 			return (&net.Dialer{Timeout: time.Second}).DialContext(ctx, network, server.Listener.Addr().String())
 		}}}
+	w.client = client
 	t.Cleanup(client.CloseIdleConnections)
 	previousLookup := getInboxActorByIRI
 	getInboxActorByIRI = func(gotApp core.App, ctx context.Context, iri string, includeFollows bool) (*core.Record, error) {
@@ -155,6 +162,9 @@ func newKnownKeyWorld(t *testing.T, actorTimeout ...time.Duration) *knownKeyWorl
 		}
 		defer response.Body.Close()
 		if response.StatusCode != http.StatusOK {
+			if response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusGone {
+				return nil, federation.ErrActorNotFound
+			}
 			return nil, fmt.Errorf("actor response: %d", response.StatusCode)
 		}
 		var document struct {

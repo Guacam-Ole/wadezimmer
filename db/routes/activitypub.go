@@ -93,8 +93,9 @@ func reloadKnownInboxActor(app core.App, ctx context.Context, actor *core.Record
 		return nil, err
 	}
 	bucket := "known-actor:" + app.DataDir() + ":" + actor.Id
-	fetched, claimRefused := false, false
+	fetched, claimRefused, invoked := false, false, false
 	result := knownInboxKeyReloads.DoChan(bucket, func() (value any, err error) {
+		invoked = true
 		defer func() {
 			if recovered := recover(); recovered != nil {
 				app.Logger().Error("actor refresh did not complete", "value", recovered, "stack", string(debug.Stack()))
@@ -133,7 +134,7 @@ func reloadKnownInboxActor(app core.App, ctx context.Context, actor *core.Record
 			return nil, err
 		}
 		if completed.Err != nil {
-			return stored, &knownInboxActorReloadError{err: completed.Err, fetched: fetched, claimRefused: claimRefused}
+			return stored, &knownInboxActorReloadError{err: completed.Err, fetched: fetched, claimRefused: claimRefused, waited: !invoked}
 		}
 		return stored, nil
 	}
@@ -191,12 +192,13 @@ func ActivitypubActivityProcess(e *core.RequestEvent) error {
 		if err != nil {
 			return err
 		}
+		storedActor := actor
 		if knownKeyReload {
 			// A known actor's first key refresh has its own budget; the
 			// recipient's other lookups cannot prevent this delivery.
-			bucket := "known-actor:" + e.App.DataDir() + ":" + actor.Id
+			bucket := "known-actor:" + e.App.DataDir() + ":" + storedActor.Id
 			ctx = util.WithRateLimitBucket(ctx, bucket)
-			actor, err = reloadKnownInboxActor(e.App, ctx, actor)
+			actor, err = reloadKnownInboxActor(e.App, ctx, storedActor)
 		} else {
 			actor, err = getInboxActorByIRI(e.App, ctx, activity.Actor.GetID().String(), false)
 		}
@@ -205,6 +207,15 @@ func ActivitypubActivityProcess(e *core.RequestEvent) error {
 			return e.InternalServerError("Unable to refresh actor", nil)
 		}
 		if err != nil {
+			if inboxActorGoneCheckAllowed(e.App, ctx, e.Request, storedActor, activity, err, knownKeyReload) {
+				legacySigned := func(stored *core.Record) bool { return legacySelfDeletionSigned(e.App, e.Request, stored) }
+				if gone, deletionError := reconcileGoneInboxActor(e.App, ctx, storedActor, activity, legacySigned); gone {
+					if deletionError != nil {
+						e.App.Logger().Warn("remote account cleanup failed", "error", deletionError)
+					}
+					return e.JSON(http.StatusOK, deletionError)
+				}
+			}
 			return e.UnauthorizedError("Unable to verify actor identity", err)
 		}
 	}

@@ -128,7 +128,7 @@ func fetchBoundedTo(ctx context.Context, client HTTPDoer, rawURL string, maxByte
 		return "", "", err
 	}
 
-	n, err := io.Copy(dst, io.LimitReader(resp.Body, maxBytes+1))
+	n, err := io.Copy(dst, io.LimitReader(boundedFederatedBody(ctx, resp.Body), maxBytes+1))
 	if err != nil {
 		return "", "", err
 	}

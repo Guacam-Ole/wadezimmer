@@ -39,6 +39,7 @@ func setupAddressingTestApp(t *testing.T) *addressingFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(app.Cleanup)
+	drainTestAppStartupLogs(t, app)
 
 	add := func(name string, fields ...core.Field) *core.Collection {
 		c := core.NewBaseCollection(name)

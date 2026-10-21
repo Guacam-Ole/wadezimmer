@@ -1,11 +1,12 @@
 package routes
 
-// Keep the result shared with waiting requests separate from work performed
-// for the current request. Waiting for an error does not permit another fetch.
+// Keep a shared result separate from work performed for the current request
+// so a deletion confirmation can distinguish a waiter from a completed fetch.
 type knownInboxActorReloadError struct {
 	err          error
 	fetched      bool
 	claimRefused bool
+	waited       bool
 }
 
 func (e *knownInboxActorReloadError) Error() string { return e.err.Error() }

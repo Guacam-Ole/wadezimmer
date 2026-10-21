@@ -11,6 +11,7 @@ const (
 	WebfingerBodyLimit        int64 = 100 << 10
 	FederationActorBodyLimit  int64 = 1 << 20
 	FederationObjectBodyLimit int64 = 2 << 20
+	FederationSyncBodyLimit   int64 = 32 << 20
 )
 
 var ErrFederationBodyTooLarge = errors.New("federation response exceeds body limit")

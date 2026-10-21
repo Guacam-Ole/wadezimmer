@@ -470,7 +470,8 @@ func ProcessDeleteActivity(app core.App, actor *core.Record, activity pub.Activi
 
 // processDeleteActorActivity handles a remote account telling us it has been
 // deleted, and removes our copy of it. Everything that account authored here is
-// carried away by the schema's cascade.
+// carried away by the schema's cascade. Cleanup retains the account when a
+// record keeps its own stored path.
 //
 // This is the most dangerous activity we accept, because it destroys a whole
 // account's content rather than one record, so it is deliberately narrow: the
@@ -512,7 +513,7 @@ func processDeleteActorActivity(app core.App, actor *core.Record, activity pub.A
 		return fmt.Errorf("refusing federated Delete of local actor %q", object)
 	}
 
-	return app.Delete(actor)
+	return util.DeleteRemoteActor(app, actor)
 }
 
 func processDeleteTrailActivity(app core.App, actor *core.Record, activity pub.Activity) error {

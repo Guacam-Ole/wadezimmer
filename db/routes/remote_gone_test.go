@@ -202,6 +202,10 @@ func TestRemoteGetDropsCopyReportedGone(t *testing.T) {
 			t.Run(name+"/blocking sync answers 404 and drops the copy", func(t *testing.T) {
 				f := setupGoneTest(t, status, tt.collection, tt.path, tt.handler)
 				record := f.cached(t, true)
+				record.Set("full_sync_completed", false)
+				if err := f.app.Save(record); err != nil {
+					t.Fatal(err)
+				}
 
 				if got := f.get(t, record.Id).Code; got != http.StatusNotFound {
 					t.Fatalf("status = %d, want 404", got)

@@ -41,6 +41,7 @@ func setupTrailDeleteTestApp(t *testing.T) *trailDeleteFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(app.Cleanup)
+	drainTestAppStartupLogs(t, app)
 
 	actors := core.NewBaseCollection("activitypub_actors")
 	actors.Fields.Add(

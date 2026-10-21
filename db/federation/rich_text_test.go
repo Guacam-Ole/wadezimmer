@@ -71,6 +71,7 @@ func TestLocalBioProjectionExplicitlyBoundsActorSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(app.Cleanup)
+	drainTestAppStartupLogs(t, app)
 	add := func(name string, fields ...core.Field) *core.Collection {
 		t.Helper()
 		collection := core.NewBaseCollection(name)

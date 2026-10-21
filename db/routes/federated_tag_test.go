@@ -53,10 +53,11 @@ func setupFederatedTagImport(t *testing.T) (*pbtests.TestApp, *core.Collection, 
 	empty := core.NewRecord(tags)
 	save(empty)
 	actors := core.NewBaseCollection("activitypub_actors")
-	actors.Fields.Add(&core.BoolField{Name: "is_local"}, &core.TextField{Name: "iri"})
+	actors.Fields.Add(&core.BoolField{Name: "is_local"}, &core.TextField{Name: "iri"}, &core.DateField{Name: "last_fetched"})
 	save(actors)
 	actor := core.NewRecord(actors)
 	actor.Set("iri", "https://remote.example/users/author")
+	actor.Set("last_fetched", time.Now())
 	save(actor)
 	trails := core.NewBaseCollection("trails")
 	trails.Fields.Add(
@@ -180,7 +181,7 @@ func TestRemoteTrailFullSyncNormalizesTags(t *testing.T) {
 			if err := app.Save(trail); err != nil {
 				t.Fatal(err)
 			}
-			remote := map[string]any{"id": "remotetrail00001", "name": "Updated trail"}
+			remote := map[string]any{"id": "remotetrail0001", "name": "Updated trail"}
 			if tt.tags != nil {
 				remote["expand"] = map[string]any{"tags": tt.tags}
 			}
@@ -215,7 +216,8 @@ func TestRemoteTrailFullSyncEmptyPocketBaseTagsRetainsRelations(t *testing.T) {
 	// Use PocketBase's real expansion and serialization: an empty relation
 	// appears in tags, but its expansion is absent from the expand object.
 	remote := core.NewRecord(collection)
-	remote.Id = "remotetrail00001"
+	remote.Id = "remotetrail0001"
+	remote.Set("iri", trail.GetString("iri"))
 	remote.Set("name", "Updated trail")
 	if errs := app.ExpandRecord(remote, []string{"tags"}, nil); len(errs) > 0 {
 		t.Fatal(errs)
