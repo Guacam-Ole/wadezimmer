@@ -1,6 +1,7 @@
 package federation
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -57,8 +58,11 @@ func TestFollowAcceptIsNotDeliveredToLoopbackInbox(t *testing.T) {
 	// error is expected and irrelevant here.
 	_ = ProcessFollowActivity(app, actors.author, *follow)
 
-	// PostActivity delivers in the background; give it time to try.
-	time.Sleep(2 * time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	if err := WaitForDeliveries(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if n := hits.Load(); n != 0 {
 		t.Errorf("loopback inbox received %d requests, want 0", n)
 	}

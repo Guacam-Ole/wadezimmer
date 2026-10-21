@@ -15,6 +15,7 @@ description: What changed in the last patch?
 - Updated ActivityPub content handling. (GHSA-fprh-3pp9-68m9, thanks @zer0d4y5)
 - Updated remote attachment handling. (GHSA-j9m4-8qwf-jvx6, thanks @zaara2004)
 - Updated remote file retrieval. (GHSA-3xp7-7492-j2q6, thanks @zaara2004)
+- Remote ActivityPub deliveries use public inbox addresses. (GHSA-vprp-gr6m-j375)
 
 ### Federation
 
@@ -26,6 +27,7 @@ description: What changed in the last patch?
 - Trails in a remote list that are hosted on a third instance are loaded from that instance, up to 30 at a time; longer lists fill in with later refreshes. Trails that instance does not serve publicly are omitted, and trails it cannot serve at the moment appear once it responds again.
 - Summit log entries, comments and trails in remote lists from accounts on other instances appear with a later refresh when a refresh cannot confirm them within its fetch limits.
 - Activities between accounts on the same instance are delivered internally.
+- Remote deliveries go only to public inbox addresses, do not follow redirects, and do not use `HTTP_PROXY` or `HTTPS_PROXY`.
 - Incoming attachments are fetched only from public addresses, with a 30-second deadline per file. GPX and avatars default to 5 MiB and photos to 20 MiB; downloads follow the configured collection file limits.
 - **Loading remote content:** New trails and lists from other instances load with limited parallelism. Many slow instances can delay the first view or cause it to fail temporarily; previously completed copies remain readable. Remote lists load up to about 1,000 trails. Documents are limited to 32 MiB and 1,000,000 JSON tokens. Larger content shows a message and a link to view it on its original instance.
 - File downloads share a 30-second, 64 MiB budget per sync; metadata and completed files are retained, and later refreshes fill missing files. Concurrent refreshes are limited and child records are written in short batches. Previously completed copies remain readable when a refresh fails.

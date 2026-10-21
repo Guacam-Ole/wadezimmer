@@ -54,6 +54,34 @@ func (rl *RateLimiter) maintenanceWorker() {
 	}
 }
 
+func (rl *RateLimiter) maintain(now time.Time) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	if rl.retainWindow {
+		threshold := now.Add(-rl.window)
+		for key, timestamps := range rl.requests {
+			remaining := timestamps[:0]
+			for _, timestamp := range timestamps {
+				if timestamp.After(threshold) {
+					remaining = append(remaining, timestamp)
+				}
+			}
+			if len(remaining) == 0 {
+				delete(rl.requests, key)
+			} else {
+				rl.requests[key] = remaining
+			}
+		}
+		return
+	}
+
+	newKey := make([]byte, 32)
+	rand.Read(newKey)
+	rl.key = newKey
+	rl.requests = make(map[string][]time.Time)
+}
+
 func (rl *RateLimiter) CheckRateLimit(identifier string, host string) error {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -152,25 +180,26 @@ func isPrivateOrReservedIP(ip net.IP) bool {
 	return false
 }
 
-// publicDialContext resolves the host, refuses private or reserved addresses
-// and dials the vetted IP, so a DNS answer cannot change between check and
-// connect.
+// publicDialContext resolves the host once, refuses private or reserved addresses,
+// and dials only the vetted addresses, alternating families without another lookup.
 func publicDialContext(dialer *net.Dialer, rateLimit bool) func(ctx context.Context, network, addr string) (net.Conn, error) {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		host, port, _ := net.SplitHostPort(addr)
 
 		if rateLimit {
-			identifier, _ := ctx.Value("actor").(string)
-			if identifier == "" {
-				identifier = "system"
-			}
-
-			if err := ActivityPubRateLimiter.CheckRateLimit(identifier, host); err != nil {
+			if err := CheckDialRateLimit(ctx, host); err != nil {
 				return nil, err
 			}
 		}
 
-		ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+		// The timeout covers resolution and all address attempts together.
+		dialCtx := ctx
+		if dialer.Timeout > 0 {
+			var cancel context.CancelFunc
+			dialCtx, cancel = context.WithTimeout(ctx, dialer.Timeout)
+			defer cancel()
+		}
+		ips, err := net.DefaultResolver.LookupIP(dialCtx, "ip", host)
 		if err != nil || len(ips) == 0 {
 			return nil, fmt.Errorf("failed to resolve: %w", err)
 		}
@@ -181,8 +210,42 @@ func publicDialContext(dialer *net.Dialer, rateLimit bool) func(ctx context.Cont
 			}
 		}
 
-		// Standard practice: Dial the first resolved IP to prevent TOCTOU/Rebinding
-		return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].String(), port))
+		ips = interleaveAddressFamilies(ips)
+		// Try only the vetted addresses, alternating families. A connection attempt
+		// gets its share of the remaining time, with a two-second minimum when
+		// the overall deadline allows it.
+		deadline, bounded := dialCtx.Deadline()
+		var firstErr error
+		for i, ip := range ips {
+			if err := dialCtx.Err(); err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				break
+			}
+			attemptCtx := dialCtx
+			cancel := context.CancelFunc(func() {})
+			if bounded {
+				remaining := time.Until(deadline)
+				if remaining <= 0 {
+					if firstErr == nil {
+						firstErr = context.DeadlineExceeded
+					}
+					break
+				}
+				share := max(remaining/time.Duration(len(ips)-i), min(remaining, 2*time.Second))
+				attemptCtx, cancel = context.WithTimeout(dialCtx, share)
+			}
+			conn, err := dialer.DialContext(attemptCtx, network, net.JoinHostPort(ip.String(), port))
+			cancel()
+			if err == nil {
+				return conn, nil
+			}
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+		return nil, firstErr
 	}
 }
 
@@ -190,7 +253,7 @@ func SafeHTTPClient() *http.Client {
 	return safeHTTPClientWithTimeouts(30*time.Second, 10*time.Second, 10*time.Second)
 }
 
-func baseHTTPClientWithTimeouts(total, headers, handshake time.Duration) *http.Client {
+func safeHTTPClientWithTimeouts(total, headers, handshake time.Duration) *http.Client {
 	dialer := &net.Dialer{Timeout: 30 * time.Second}
 
 	return &http.Client{
@@ -213,6 +276,14 @@ func SafeDeliveryClient(timeout time.Duration) *http.Client {
 		Timeout: timeout,
 		Transport: &http.Transport{
 			DialContext: publicDialContext(dialer, false),
+			// A custom DialContext requires HTTP/2 to be enabled explicitly.
+			// Deliveries to one host share HTTP/2 connections; every new
+			// connection still passes through publicDialContext.
+			ForceAttemptHTTP2: true,
+			MaxIdleConns:      100,
+			// Keep one idle connection per parallel delivery to a host.
+			MaxIdleConnsPerHost: 5,
+			IdleConnTimeout:     90 * time.Second,
 		},
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
@@ -237,4 +308,31 @@ func GetSafeActorContext(r *http.Request, userActor *core.Record) (context.Conte
 		parentCtx = r.Context()
 	}
 	return context.WithValue(parentCtx, "actor", identifier), nil
+}
+
+// interleaveAddressFamilies preserves order within each family and starts with
+// the first family in the resolver answer.
+func interleaveAddressFamilies(ips []net.IP) []net.IP {
+	if len(ips) < 2 {
+		return ips
+	}
+	var first, other []net.IP
+	ipv4First := ips[0].To4() != nil
+	for _, ip := range ips {
+		if (ip.To4() != nil) == ipv4First {
+			first = append(first, ip)
+		} else {
+			other = append(other, ip)
+		}
+	}
+	ordered := make([]net.IP, 0, len(ips))
+	for i := 0; i < len(first) || i < len(other); i++ {
+		if i < len(first) {
+			ordered = append(ordered, first[i])
+		}
+		if i < len(other) {
+			ordered = append(ordered, other[i])
+		}
+	}
+	return ordered
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -28,8 +29,18 @@ import (
 
 var httpClient atomic.Pointer[http.Client]
 
+const deliveryErrorBodyLimit int64 = 4 << 10
+
 func init() {
 	httpClient.Store(util.SafeDeliveryClient(10 * time.Second))
+}
+
+func validateDeliveryInbox(inbox string) error {
+	parsed, err := url.Parse(inbox)
+	if err != nil || parsed.Hostname() == "" || parsed.User != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return fmt.Errorf("invalid activity inbox URL")
+	}
+	return nil
 }
 
 // deliveries counts the activities PostActivity is still delivering in the
@@ -152,6 +163,11 @@ func PostActivity(app core.App, actor *core.Record, activity *pub.Activity, reci
 				}
 				defer sem.Release(1)
 
+				if err := validateDeliveryInbox(inbox); err != nil {
+					app.Logger().Error(fmt.Sprintf("Invalid inbox: %s", err))
+					return
+				}
+
 				req, err := http.NewRequest(http.MethodPost, inbox, bytes.NewBuffer(body))
 				if err != nil {
 					app.Logger().Error(fmt.Sprintf("Request creation failed: %s", err))
@@ -180,7 +196,7 @@ func PostActivity(app core.App, actor *core.Record, activity *pub.Activity, reci
 				defer resp.Body.Close()
 
 				if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
-					respBody, _ := io.ReadAll(resp.Body)
+					respBody, _ := io.ReadAll(io.LimitReader(resp.Body, deliveryErrorBodyLimit))
 					app.Logger().Error(fmt.Sprintf("Inbox %s responded with %d: %s", inbox, resp.StatusCode, respBody))
 				} else {
 					app.Logger().Info(fmt.Sprintf("Sent %s to %s", activity.Type, inbox), "activity", activity)
