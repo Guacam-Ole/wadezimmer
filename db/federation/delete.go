@@ -514,6 +514,11 @@ func processDeleteTrailActivity(app core.App, actor *core.Record, activity pub.A
 	if trail.GetString("author") != actor.Id {
 		return fmt.Errorf("actor is not trail author")
 	}
+	// The object may have appeared after the marker's initial lookup.
+	// Remember the checked ID before deleting it, including late feed writes.
+	if key, ordered := inboxOrderKey(app, actor, activity); ordered {
+		rememberInboxRetractionItem(key, inboxRetractionItem{collection: "trails", id: trail.Id})
+	}
 
 	err = util.DeleteFromFeed(app, trail.Id)
 	if err != nil {
@@ -567,6 +572,9 @@ func processDeleteListActivity(app core.App, actor *core.Record, activity pub.Ac
 
 	if list.GetString("author") != actor.Id {
 		return fmt.Errorf("actor is not list author")
+	}
+	if key, ordered := inboxOrderKey(app, actor, activity); ordered {
+		rememberInboxRetractionItem(key, inboxRetractionItem{collection: "lists", id: list.Id})
 	}
 
 	err = util.DeleteFromFeed(app, list.Id)

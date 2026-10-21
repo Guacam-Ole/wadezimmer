@@ -450,7 +450,7 @@ func ProcessCreateOrUpdateActivity(app core.App, actor *core.Record, recipient *
 }
 
 func processCreateOrUpdateTrailActivity(activity pub.Activity, app core.App, actor *core.Record, recipient *core.Record) error {
-	trail, err := util.TrailFromActivity(activity, app, actor)
+	trail, storedElsewhere, err := util.TrailFromConcurrentActivity(activity, app, actor)
 	if err != nil {
 		return err
 	}
@@ -458,6 +458,12 @@ func processCreateOrUpdateTrailActivity(activity pub.Activity, app core.App, act
 	_, err = util.InsertIntoFeed(app, recipient.Id, actor.Id, trail.Id, util.TrailFeed)
 	if err != nil {
 		return err
+	}
+
+	// Among parallel deliveries of the same activity, only the delivery
+	// that stored the trail notifies the mentioned accounts.
+	if storedElsewhere {
+		return nil
 	}
 
 	trailObject, err := pub.ToObject(activity.Object)

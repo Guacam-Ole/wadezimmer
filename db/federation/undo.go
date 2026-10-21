@@ -1,6 +1,7 @@
 package federation
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -128,20 +129,44 @@ func CreateUnlikeActivity(app core.App, like *core.Record) error {
 }
 
 func ProcessUndoActivity(app core.App, actor *core.Record, activity pub.Activity) error {
+	return processUndoActivity(app, actor, activity, nil)
+}
+
+var errUndoSuperseded = errors.New("undo superseded by a later action")
+
+func processUndoActivity(app core.App, actor *core.Record, activity pub.Activity, superseded func() bool) error {
 	object, ok := activity.Object.(*pub.Activity)
 	if !ok || object == nil {
 		return fmt.Errorf("undo object must be an activity")
 	}
 	if activity.Object.GetType() == pub.FollowType {
-		return processUnfollowActivity(app, actor, activity)
+		return undoFollow(app, actor, activity, superseded)
 	} else if activity.Object.GetType() == pub.LikeType {
-		return processUnlikeActivity(app, actor, activity)
+		return undoLike(app, actor, activity, superseded)
 	} else {
 		return fmt.Errorf("unknown undo activity object type")
 	}
 }
 
+// A later action noted before the check keeps the record; one noted after it
+// saves only after the removal releases the writer.
+func removeUndoneRecord(app core.App, record *core.Record, superseded func() bool) error {
+	if superseded == nil {
+		return app.Delete(record)
+	}
+	return app.RunInTransaction(func(tx core.App) error {
+		if superseded() {
+			return errUndoSuperseded
+		}
+		return tx.Delete(record)
+	})
+}
+
 func processUnfollowActivity(app core.App, actor *core.Record, activity pub.Activity) error {
+	return undoFollow(app, actor, activity, nil)
+}
+
+func undoFollow(app core.App, actor *core.Record, activity pub.Activity, superseded func() bool) error {
 	// this was a local follow
 	if actor.GetBool("is_local") {
 		return nil
@@ -162,14 +187,14 @@ func processUnfollowActivity(app core.App, actor *core.Record, activity pub.Acti
 		return err
 	}
 
-	err = app.Delete(follow)
-	if err != nil {
-		return err
-	}
-	return nil
+	return removeUndoneRecord(app, follow, superseded)
 }
 
 func processUnlikeActivity(app core.App, actor *core.Record, activity pub.Activity) error {
+	return undoLike(app, actor, activity, nil)
+}
+
+func undoLike(app core.App, actor *core.Record, activity pub.Activity, superseded func() bool) error {
 	if actor.GetBool("is_local") {
 		return nil
 	}
@@ -189,9 +214,5 @@ func processUnlikeActivity(app core.App, actor *core.Record, activity pub.Activi
 		return err
 	}
 
-	err = app.Delete(like)
-	if err != nil {
-		return err
-	}
-	return nil
+	return removeUndoneRecord(app, like, superseded)
 }

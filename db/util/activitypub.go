@@ -6,10 +6,8 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"database/sql"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -224,7 +222,7 @@ func IsLocalIRI(iri string) bool {
 	return strings.EqualFold(u.Host, o.Host)
 }
 
-func TrailFromActivity(activity pub.Activity, app core.App, actor *core.Record) (*core.Record, error) {
+func trailFromActivity(activity pub.Activity, app core.App, actor *core.Record) (*core.Record, error) {
 	t, err := pub.ToObject(activity.Object)
 	if err != nil {
 		return nil, err
@@ -623,7 +621,7 @@ func ObjectFromTrail(app core.App, trail *core.Record, mentions *pub.ItemCollect
 	return trailObject, nil
 }
 
-func ListFromActivity(activity pub.Activity, app core.App, actor *core.Record) (*core.Record, error) {
+func listFromActivity(activity pub.Activity, app core.App, actor *core.Record) (*core.Record, error) {
 	l, err := pub.ToObject(activity.Object)
 	if err != nil {
 		return nil, err
@@ -779,10 +777,12 @@ func ObjectFromComment(app core.App, comment *core.Record, mentions *pub.ItemCol
 	return commentObject, nil
 }
 
+var newTrailObjectHTTPClient = SafeHTTPClient
+
 func TrailObjectFromIRI(iri string) (*pub.Object, error) {
 	fetchURL := strings.Replace(iri, "api/v1/trail", "api/v1/activitypub/trail", 1)
 
-	client := SafeHTTPClient()
+	client := newTrailObjectHTTPClient()
 
 	req, err := http.NewRequest(http.MethodGet, fetchURL, nil)
 	if err != nil {
@@ -801,14 +801,8 @@ func TrailObjectFromIRI(iri string) (*pub.Object, error) {
 		return nil, fmt.Errorf("fetching trail %s returned: %d", fetchURL, resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
 	var object pub.Object
-	err = json.Unmarshal(body, &object)
-	if err != nil {
+	if err := DecodeFederationJSON(resp.Body, FederationObjectBodyLimit, &object); err != nil {
 		return nil, err
 	}
 	if object.ID == "" {
@@ -818,7 +812,7 @@ func TrailObjectFromIRI(iri string) (*pub.Object, error) {
 	return &object, nil
 }
 
-func VerifySignature(app core.App, req *http.Request, publicKeyPem string) (bool, error) {
+func VerifySignature(app core.App, req *http.Request, publicKeyPem string, actorIRI ...string) (bool, error) {
 	origin := os.Getenv("ORIGIN")
 	if origin == "" {
 		return false, fmt.Errorf("ORIGIN not set")
@@ -849,6 +843,9 @@ func VerifySignature(app core.App, req *http.Request, publicKeyPem string) (bool
 	if err != nil {
 		return false, err
 	}
+	if len(actorIRI) > 0 && !SignatureKeyIsOnActorHost(v.KeyId(), actorIRI[0]) {
+		return false, fmt.Errorf("signature key id is not on the activity actor's host")
+	}
 
 	err = v.Verify(publicKey, httpsig.RSA_SHA256)
 	if err != nil {
@@ -856,6 +853,25 @@ func VerifySignature(app core.App, req *http.Request, publicKeyPem string) (bool
 	}
 
 	return true, nil
+}
+
+// SignatureKeyIsOnActorHost reports whether keyID names a key published by the
+// actor's own host. Servers disagree on the key's path: Mastodon and most
+// others use "<actor>#main-key", GoToSocial "<actor>/main-key", BookWyrm
+// "<actor>/#main-key", Hubzilla and PeerTube before 7.1 the actor IRI itself.
+// The host is the boundary that matters, because a signature is only ever
+// checked against the key stored for the activity's actor, and that key only
+// comes from a document whose id is the actor IRI that was fetched.
+func SignatureKeyIsOnActorHost(keyID, actorIRI string) bool {
+	key, keyErr := url.Parse(keyID)
+	actor, actorErr := url.Parse(actorIRI)
+	if keyErr != nil || actorErr != nil || key.User != nil || actor.User != nil {
+		return false
+	}
+	if (key.Scheme != "http" && key.Scheme != "https") || (actor.Scheme != "http" && actor.Scheme != "https") {
+		return false
+	}
+	return key.Host != "" && strings.EqualFold(key.Host, actor.Host)
 }
 
 func SplitHandle(handle string) (string, string) {

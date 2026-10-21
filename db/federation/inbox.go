@@ -2,6 +2,7 @@ package federation
 
 import (
 	"fmt"
+	"time"
 
 	pub "github.com/go-ap/activitypub"
 	"github.com/pocketbase/dbx"
@@ -11,6 +12,19 @@ import (
 // ProcessInboxActivity dispatches an activity after its sender has been
 // authenticated by the HTTP inbox or by the local delivery binding.
 func ProcessInboxActivity(app core.App, actor, recipient *core.Record, activity pub.Activity) error {
+	return ProcessReceivedInboxActivity(app, actor, recipient, activity, time.Now())
+}
+
+// ProcessReceivedInboxActivity dispatches a delivery using the time it reached
+// the inbox, before any wait for the sender's key.
+func ProcessReceivedInboxActivity(app core.App, actor, recipient *core.Record, activity pub.Activity, received time.Time) error {
+	if actor != nil && !actor.GetBool("is_local") {
+		return processOrderedInboxActivity(app, actor, recipient, activity, received)
+	}
+	return dispatchInboxActivity(app, actor, recipient, activity)
+}
+
+func dispatchInboxActivity(app core.App, actor, recipient *core.Record, activity pub.Activity) error {
 	switch activity.Type {
 	case pub.FollowType:
 		return ProcessFollowActivity(app, actor, activity)

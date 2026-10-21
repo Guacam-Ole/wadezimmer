@@ -20,19 +20,25 @@ import (
 var ErrRateLimited = fmt.Errorf("rate limit exceeded for origin")
 
 type RateLimiter struct {
-	mu       sync.RWMutex
-	requests map[string][]time.Time
-	maxReqs  int
-	window   time.Duration
-	key      []byte
+	mu           sync.RWMutex
+	requests     map[string][]time.Time
+	maxReqs      int
+	window       time.Duration
+	key          []byte
+	retainWindow bool
 }
 
 func NewRateLimiter(maxReqs int, window time.Duration) *RateLimiter {
+	return newRateLimiter(maxReqs, window, false)
+}
+
+func newRateLimiter(maxReqs int, window time.Duration, retainWindow bool) *RateLimiter {
 	rl := &RateLimiter{
-		requests: make(map[string][]time.Time),
-		maxReqs:  maxReqs,
-		window:   window,
-		key:      make([]byte, 32),
+		requests:     make(map[string][]time.Time),
+		maxReqs:      maxReqs,
+		window:       window,
+		key:          make([]byte, 32),
+		retainWindow: retainWindow,
 	}
 	rand.Read(rl.key)
 
@@ -43,16 +49,8 @@ func NewRateLimiter(maxReqs int, window time.Duration) *RateLimiter {
 
 func (rl *RateLimiter) maintenanceWorker() {
 	ticker := time.NewTicker(rl.window * 2)
-	for range ticker.C {
-		rl.mu.Lock()
-
-		newKey := make([]byte, 32)
-		rand.Read(newKey)
-		rl.key = newKey
-
-		rl.requests = make(map[string][]time.Time)
-
-		rl.mu.Unlock()
+	for now := range ticker.C {
+		rl.maintain(now)
 	}
 }
 
@@ -87,6 +85,30 @@ func (rl *RateLimiter) CheckRateLimit(identifier string, host string) error {
 }
 
 var ActivityPubRateLimiter = NewRateLimiter(30, time.Minute)
+
+// KnownActorKeyReloads admits one refresh per actor and minute. Maintenance
+// removes expired claims while preserving the full window of recent claims.
+var KnownActorKeyReloads = newRateLimiter(1, time.Minute, true)
+
+type rateLimitBucketKey struct{}
+
+// WithRateLimitBucket changes the dial budget without changing the actor
+// whose key signs the request.
+func WithRateLimitBucket(ctx context.Context, bucket string) context.Context {
+	return context.WithValue(ctx, rateLimitBucketKey{}, bucket)
+}
+
+// CheckDialRateLimit applies the dial budget selected by ctx.
+func CheckDialRateLimit(ctx context.Context, host string) error {
+	identifier, _ := ctx.Value(rateLimitBucketKey{}).(string)
+	if identifier == "" {
+		identifier, _ = ctx.Value("actor").(string)
+	}
+	if identifier == "" {
+		identifier = "system"
+	}
+	return ActivityPubRateLimiter.CheckRateLimit(identifier, host)
+}
 
 type safeTransport struct {
 	transport http.RoundTripper
@@ -131,10 +153,17 @@ func isPrivateOrReservedIP(ip net.IP) bool {
 }
 
 func SafeHTTPClient() *http.Client {
+	return safeHTTPClientWithTimeouts(30*time.Second, 10*time.Second, 10*time.Second)
+}
+
+func baseHTTPClientWithTimeouts(total, headers, handshake time.Duration) *http.Client {
 	dialer := &net.Dialer{Timeout: 30 * time.Second}
 
 	return &http.Client{
+		Timeout: total,
 		Transport: &http.Transport{
+			ResponseHeaderTimeout: headers,
+			TLSHandshakeTimeout:   handshake,
 			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 				host, port, _ := net.SplitHostPort(addr)
 
