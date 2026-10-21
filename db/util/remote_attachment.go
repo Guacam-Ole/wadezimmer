@@ -3,6 +3,7 @@ package util
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -11,12 +12,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/doyensec/safeurl"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 )
 
 const (
-	// Per-file size limits, equal to the maxSize of the matching collection fields.
+	// Default per-file limits when the matching collection field is unavailable.
 	RemoteGPXMaxBytes    int64 = 5 << 20
 	RemotePhotoMaxBytes  int64 = 20 << 20
 	RemoteAvatarMaxBytes int64 = 5 << 20
@@ -29,9 +31,21 @@ const (
 	RemoteMaxPhotosPerObject = 99
 )
 
+// RemoteFileLimit uses the configured file field, including administrator
+// changes, and falls back to the shipped limit when the field is unavailable.
+func RemoteFileLimit(record *core.Record, name string, fallback int64) int64 {
+	if field, ok := record.Collection().Fields.GetByName(name).(*core.FileField); ok && field.MaxSize > 0 {
+		return field.MaxSize
+	}
+	return fallback
+}
+
 var (
-	remoteAttachmentClientMu sync.RWMutex
-	remoteAttachmentClient   HTTPDoer
+	remoteAttachmentClientMu  sync.RWMutex
+	remoteAttachmentClient    HTTPDoer
+	newRemoteAttachmentClient = func(time.Duration, func(*http.Request, []*http.Request) error) HTTPDoer {
+		return safeurl.Client(federatedFileHTTPConfig)
+	}
 )
 
 // SetRemoteAttachmentClientForTesting replaces the HTTP client used by
@@ -96,8 +110,8 @@ func attachmentFileName(finalURL string) string {
 // DownloadRemoteFile downloads rawURL to a temp file and returns it with a
 // cleanup function (never nil) that removes the temp file.
 //
-// Only public addresses on ports 80 and 443 are fetched, including on
-// redirects, and the body is limited to maxBytes and RemoteAttachmentTimeout.
+// Only public addresses are fetched, including on redirects, and the body
+// is limited to maxBytes and RemoteAttachmentTimeout.
 func DownloadRemoteFile(ctx context.Context, rawURL string, maxBytes int64) (*filesystem.File, func(), error) {
 	noop := func() {}
 	if maxBytes <= 0 {
@@ -113,8 +127,9 @@ func DownloadRemoteFile(ctx context.Context, rawURL string, maxBytes int64) (*fi
 
 	client := installedRemoteAttachmentClient()
 	if client == nil {
-		client = NewSafeURLClient(RemoteAttachmentTimeout, publicMediaRedirectPolicy)
+		client = newRemoteAttachmentClient(RemoteAttachmentTimeout, publicMediaRedirectPolicy)
 	}
+	defer closeIdleHTTPConnections(client)
 
 	dir, err := os.MkdirTemp("", "wanderer-attachment-*")
 	if err != nil {

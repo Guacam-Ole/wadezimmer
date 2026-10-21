@@ -21,10 +21,6 @@ import (
 // Attachment downloads must not reach loopback or private addresses, must be
 // limited in size, time and number, and must not leave temp files behind.
 
-// attachmentGPXFixtureMaxSize is larger than the production gpx maxSize so the
-// oversize test hits the download limit, not the collection validation.
-const attachmentGPXFixtureMaxSize = 64 << 20
-
 type attachmentFixture struct {
 	app   core.App
 	owner feedDedupActors
@@ -40,13 +36,13 @@ func attachmentAddCollections(t *testing.T, app core.App) {
 	trails.Fields.Add(
 		text("iri"), text("author"), text("name"),
 		&core.BoolField{Name: "public"},
-		&core.FileField{Name: "gpx", MaxSelect: 1, MaxSize: attachmentGPXFixtureMaxSize},
+		&core.FileField{Name: "gpx", MaxSelect: 1, MaxSize: util.RemoteGPXMaxBytes},
 		&core.FileField{Name: "photos", MaxSelect: 99, MaxSize: 20 << 20},
 	)
 	summitLogs := core.NewBaseCollection("summit_logs")
 	summitLogs.Fields.Add(
 		text("iri"), text("author"), text("trail"), text("text"),
-		&core.FileField{Name: "gpx", MaxSelect: 1, MaxSize: attachmentGPXFixtureMaxSize},
+		&core.FileField{Name: "gpx", MaxSelect: 1, MaxSize: util.RemoteGPXMaxBytes},
 		&core.FileField{Name: "photos", MaxSelect: 99, MaxSize: 20 << 20},
 	)
 	lists := core.NewBaseCollection("lists")

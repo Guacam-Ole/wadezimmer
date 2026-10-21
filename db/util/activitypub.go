@@ -383,7 +383,7 @@ func TrailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 		if len(photoURLs) > 0 {
 			photos := []*filesystem.File{}
 			for _, purl := range photoURLs {
-				photo, cleanup, err := DownloadRemoteFile(context.Background(), purl, RemotePhotoMaxBytes)
+				photo, cleanup, err := DownloadRemoteFile(context.Background(), purl, RemoteFileLimit(record, "photos", RemotePhotoMaxBytes))
 				defer cleanup()
 				if err != nil {
 					continue
@@ -395,7 +395,7 @@ func TrailFromActivity(activity pub.Activity, app core.App, actor *core.Record) 
 		}
 
 		if gpxURL != "" {
-			gpx, cleanup, err := DownloadRemoteFile(context.Background(), gpxURL, RemoteGPXMaxBytes)
+			gpx, cleanup, err := DownloadRemoteFile(context.Background(), gpxURL, RemoteFileLimit(record, "gpx", RemoteGPXMaxBytes))
 			defer cleanup()
 			if err != nil {
 				return nil, err
@@ -691,7 +691,7 @@ func ListFromActivity(activity pub.Activity, app core.App, actor *core.Record) (
 		}
 
 		if avatarURL != "" {
-			avatar, cleanup, err := DownloadRemoteFile(context.Background(), avatarURL, RemoteAvatarMaxBytes)
+			avatar, cleanup, err := DownloadRemoteFile(context.Background(), avatarURL, RemoteFileLimit(record, "avatar", RemoteAvatarMaxBytes))
 			defer cleanup()
 			if err != nil {
 				return nil, err

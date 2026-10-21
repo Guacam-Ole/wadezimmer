@@ -52,6 +52,12 @@ type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
+func closeIdleHTTPConnections(client HTTPDoer) {
+	if closer, ok := client.(interface{ CloseIdleConnections() }); ok {
+		closer.CloseIdleConnections()
+	}
+}
+
 // NewSafeURLClient builds an SSRF-safe HTTP client that allows ports 80 and 443.
 // timeout is the per-request deadline; checkRedirect may be nil.
 func NewSafeURLClient(timeout time.Duration, checkRedirect func(*http.Request, []*http.Request) error) HTTPDoer {
@@ -71,11 +77,14 @@ func NewSafeURLClient(timeout time.Duration, checkRedirect func(*http.Request, [
 	return safeurl.Client(b.Build())
 }
 
+var newPublicURLClient = NewSafeURLClient
+
 func FetchPublicURL(ctx context.Context, rawURL string, maxBytes int64) (*SafeFetchResult, error) {
 	if maxBytes <= 0 {
 		maxBytes = DefaultPluginMediaMaxBytes
 	}
-	client := NewSafeURLClient(60*time.Second, publicMediaRedirectPolicy)
+	client := newPublicURLClient(60*time.Second, publicMediaRedirectPolicy)
+	defer closeIdleHTTPConnections(client)
 	return fetchBounded(ctx, client, rawURL, maxBytes)
 }
 
