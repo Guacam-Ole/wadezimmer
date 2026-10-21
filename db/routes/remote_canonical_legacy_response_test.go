@@ -8,7 +8,7 @@ import (
 
 func TestCanonicalContributionsAcceptLegacyIdentityOnlyAtTheirExactEndpoint(t *testing.T) {
 	t.Setenv("ORIGIN", "https://local.example")
-	for _, kind := range []string{"summit-log"} {
+	for _, kind := range []string{"summit-log", "comment"} {
 		for _, state := range []string{"legacy", "modern", "wrong-id", "wrong-object", "wrong-author", "wrong-parent", "query", "encoded-path"} {
 			t.Run(kind+"/"+state, func(t *testing.T) {
 				f := newRemoteChildFixture(t, "summit_log")
@@ -34,10 +34,18 @@ func TestCanonicalContributionsAcceptLegacyIdentityOnlyAtTheirExactEndpoint(t *t
 				}
 				client := &http.Client{Transport: richTextSyncTransport{data}}
 				accepted, text := false, ""
-				value, ok := fetchCanonicalRemoteSummitLog(f.app, t.Context(), client, f.trail, canonicalLogRequest{iri: iri, url: target})
-				accepted, text = ok, ""
-				if ok {
-					text, _ = value.data["text"].(string)
+				if kind == "comment" {
+					value, ok := fetchCanonicalRemoteComment(f.app, t.Context(), client, f.trail, canonicalCommentRequest{iri: iri, url: target})
+					accepted = ok
+					if ok {
+						text, _ = value.data["text"].(string)
+					}
+				} else {
+					value, ok := fetchCanonicalRemoteSummitLog(f.app, t.Context(), client, f.trail, canonicalLogRequest{iri: iri, url: target})
+					accepted = ok
+					if ok {
+						text, _ = value.data["text"].(string)
+					}
 				}
 				want := state == "legacy" || state == "modern"
 				if accepted != want || (accepted && text != "Authoritative legacy text") {

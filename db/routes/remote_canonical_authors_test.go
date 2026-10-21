@@ -13,7 +13,7 @@ import (
 )
 
 func TestCanonicalObjectsResolveOneNewAuthorWithAnIndependentDeadline(t *testing.T) {
-	for _, kind := range []string{"summit-log"} {
+	for _, kind := range []string{"summit-log", "comment"} {
 		t.Run(kind, func(t *testing.T) {
 			t.Setenv("ORIGIN", "https://local.example")
 			f := newRemoteChildFixture(t, "summit_log")
@@ -56,7 +56,16 @@ func TestCanonicalObjectsResolveOneNewAuthorWithAnIndependentDeadline(t *testing
 				objectIRI := fmt.Sprintf("https://third.example/api/v1/%s/%d", kind, i)
 				entries = append(entries, map[string]any{"iri": objectIRI})
 			}
-			count := len(fetchCanonicalRemoteSummitLogs(f.app, t.Context(), map[string]any{"expand": map[string]any{"summit_logs_via_trail": entries}}, f.trail, "https://remote.example"))
+			count := 0
+			if kind == "summit-log" {
+				count = len(fetchCanonicalRemoteSummitLogs(f.app, t.Context(), map[string]any{"expand": map[string]any{"summit_logs_via_trail": entries}}, f.trail, "https://remote.example"))
+			} else {
+				references := []canonicalCommentReference{}
+				for _, entry := range entries {
+					references = append(references, canonicalCommentReference{iri: entry.(map[string]any)["iri"].(string)})
+				}
+				count = len(fetchCanonicalRemoteComments(f.app, t.Context(), newRemoteSyncHTTPClient(), f.trail, references))
+			}
 			if count != 4 || lookups.Load() != 1 {
 				t.Fatalf("canonical objects lost to a shared actor race/deadline: objects=%d actor lookups=%d", count, lookups.Load())
 			}

@@ -24,7 +24,7 @@ func (b canonicalCountedBody) Read(p []byte) (int, error) {
 func (b canonicalCountedBody) Close() error { b.closed.Add(1); return nil }
 
 func TestCanonicalContributionsBoundBodiesAndRetainedSchema(t *testing.T) {
-	for _, kind := range []string{"summit-log"} {
+	for _, kind := range []string{"summit-log", "comment", "note"} {
 		for _, scenario := range []string{"body-limit", "schema", "aggregate"} {
 			t.Run(kind+"/"+scenario, func(t *testing.T) {
 				t.Setenv("ORIGIN", "https://local.example")
@@ -47,6 +47,9 @@ func TestCanonicalContributionsBoundBodiesAndRetainedSchema(t *testing.T) {
 						id := strings.TrimPrefix(request.URL.Path, "/api/v1/"+kind+"/")
 						iri := "https://third.example" + request.URL.Path
 						payload := map[string]any{"id": id, "iri": iri, "text": "Confirmed", "padding": padding, "expand": map[string]any{"author": map[string]any{"iri": actor.GetString("iri")}, "trail": map[string]any{"iri": f.trail.GetString("iri")}}}
+						if kind == "note" {
+							payload = map[string]any{"id": iri, "type": "Note", "content": "Confirmed", "attributedTo": actor.GetString("iri"), "inReplyTo": f.trail.GetString("iri"), "to": "https://www.w3.org/ns/activitystreams#Public", "padding": padding}
+						}
 						wire, err := json.Marshal(payload)
 						if err != nil {
 							return nil, err
@@ -63,8 +66,18 @@ func TestCanonicalContributionsBoundBodiesAndRetainedSchema(t *testing.T) {
 					entries = append(entries, map[string]any{"id": fmt.Sprint(i), "iri": iri})
 				}
 				data := []map[string]any{}
-				for _, value := range fetchCanonicalRemoteSummitLogs(f.app, t.Context(), map[string]any{"expand": map[string]any{"summit_logs_via_trail": entries}}, f.trail, "https://remote.example") {
-					data = append(data, value.data)
+				if kind == "summit-log" {
+					for _, value := range fetchCanonicalRemoteSummitLogs(f.app, t.Context(), map[string]any{"expand": map[string]any{"summit_logs_via_trail": entries}}, f.trail, "https://remote.example") {
+						data = append(data, value.data)
+					}
+				} else {
+					references := []canonicalCommentReference{}
+					for _, entry := range entries {
+						references = append(references, canonicalCommentReference{iri: entry.(map[string]any)["iri"].(string)})
+					}
+					for _, value := range fetchCanonicalRemoteComments(f.app, t.Context(), newRemoteSyncHTTPClient(), f.trail, references) {
+						data = append(data, value.data)
+					}
 				}
 				if responses.Load() != closed.Load() {
 					t.Fatalf("response body leak: responses%d closed%d", responses.Load(), closed.Load())

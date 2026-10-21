@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/pocketbase/pocketbase/core"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -94,5 +95,54 @@ func TestRemoteSyncDocumentBodies(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestRemoteCommentListingBoundsCompleteResponse(t *testing.T) {
+	t.Setenv("ORIGIN", "https://local.example")
+	f := newRemoteSyncFixture(t)
+	comments := core.NewBaseCollection("comments")
+	comments.Fields.Add(&core.TextField{Name: "iri"}, &core.TextField{Name: "trail"}, &core.TextField{Name: "author"})
+	if err := f.app.Save(comments); err != nil {
+		t.Fatal(err)
+	}
+	trail := f.save(f.trails, map[string]any{"iri": "https://remote.example/api/v1/trail/t", "author": f.remoteActor.Id})
+	for _, oversize := range []bool{false, true} {
+		bodyText := `{"items":[]}`
+		if oversize {
+			bodyText += strings.Repeat(" ", int(util.FederationObjectBodyLimit))
+		}
+		body := &remoteLimitBody{Reader: strings.NewReader(bodyText)}
+		original := newRemoteCommentSyncHTTPClient
+		newRemoteCommentSyncHTTPClient = func() *http.Client { return &http.Client{Transport: remoteLimitTransport{body: body, status: 200}} }
+		e := &core.RequestEvent{App: f.app}
+		e.Request = httptest.NewRequest(http.MethodGet, "https://local.example/api/v1/comment", nil)
+		err := syncRemoteComments(e, trail)
+		newRemoteCommentSyncHTTPClient = original
+		if !body.closed {
+			t.Fatal("listing body leaked")
+		}
+		if oversize {
+			if !errors.Is(err, util.ErrFederationBodyTooLarge) || body.read != util.FederationObjectBodyLimit+1 {
+				t.Fatalf("oversize listing read=%d err=%v", body.read, err)
+			}
+		} else if err != nil {
+			t.Fatalf("small listing refused: %v", err)
+		}
+	}
+}
+
+func TestRemoteCommentListingClosesStatusErrorBody(t *testing.T) {
+	t.Setenv("ORIGIN", "https://local.example")
+	f := newRemoteSyncFixture(t)
+	trail := f.save(f.trails, map[string]any{"iri": "https://remote.example/api/v1/trail/t", "author": f.remoteActor.Id})
+	body := &remoteLimitBody{Reader: strings.NewReader("unavailable")}
+	original := newRemoteCommentSyncHTTPClient
+	newRemoteCommentSyncHTTPClient = func() *http.Client { return &http.Client{Transport: remoteLimitTransport{body: body, status: 503}} }
+	defer func() { newRemoteCommentSyncHTTPClient = original }()
+	e := &core.RequestEvent{App: f.app}
+	e.Request = httptest.NewRequest(http.MethodGet, "https://local.example/api/v1/comment", nil)
+	if err := syncRemoteComments(e, trail); err == nil || !body.closed {
+		t.Fatalf("status error leaked body: err=%v closed=%v", err, body.closed)
 	}
 }
