@@ -256,6 +256,9 @@ func CreateCommentDeleteActivity(app core.App, client meilisearch.ServiceManager
 }
 
 func CreateSummitLogDeleteActivity(app core.App, r *core.Record) error {
+	if r.GetBool("federation_suppressed") {
+		return nil
+	}
 	if iri := r.GetString("iri"); iri != "" && !util.RecordHasLocalIdentity(app, r) {
 		return nil
 	}

@@ -193,6 +193,9 @@ func CreateCommentActivity(app core.App, ctx context.Context, comment *core.Reco
 }
 
 func CreateSummitLogActivity(app core.App, ctx context.Context, summitLog *core.Record, typ pub.ActivityVocabularyType) error {
+	if summitLog.GetBool("federation_suppressed") {
+		return nil
+	}
 
 	origin := os.Getenv("ORIGIN")
 	if origin == "" {
