@@ -16,6 +16,7 @@ func TestSyncTrailsKeepsLocalSyncFlags(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer app.Cleanup()
+	drainTestAppStartupLogs(t, app)
 
 	actors := core.NewBaseCollection("activitypub_actors")
 	actors.Fields.Add(&core.TextField{Name: "iri"}, &core.BoolField{Name: "is_local"})

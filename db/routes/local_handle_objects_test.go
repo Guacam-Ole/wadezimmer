@@ -23,6 +23,7 @@ func localHandleObjectFixture(t *testing.T) (*pbtests.TestApp, *core.Record, *co
 		t.Fatal(err)
 	}
 	t.Cleanup(app.Cleanup)
+	drainTestAppStartupLogs(t, app)
 	actors := core.NewBaseCollection("activitypub_actors")
 	actors.Fields.Add(&core.TextField{Name: "user"}, &core.BoolField{Name: "is_local"},
 		&core.TextField{Name: "preferred_username"}, &core.TextField{Name: "domain"}, &core.TextField{Name: "iri"})

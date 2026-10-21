@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"slices"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	pbtests "github.com/pocketbase/pocketbase/tests"
+	"github.com/pocketbase/pocketbase/tools/logger"
 )
 
 func TestRemoteSyncUsesRemoteAuthors(t *testing.T) {
@@ -77,6 +79,14 @@ type remoteSyncFixture struct {
 	localActor, remoteActor                *core.Record
 }
 
+func drainTestAppStartupLogs(t *testing.T, app core.App) {
+	t.Helper()
+	// Startup logs predate TestApp disabling storage; drain them while the app is live.
+	if err := app.Logger().Handler().(*logger.BatchHandler).WriteAll(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func newRemoteSyncFixture(t *testing.T) *remoteSyncFixture {
 	t.Helper()
 	app, err := pbtests.NewTestApp(t.TempDir())
@@ -84,6 +94,7 @@ func newRemoteSyncFixture(t *testing.T) *remoteSyncFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(app.Cleanup)
+	drainTestAppStartupLogs(t, app)
 	app.Settings().Logs.MaxDays = 0
 	f := &remoteSyncFixture{t: t, app: app}
 	collection := func(name string, fields ...core.Field) *core.Collection {

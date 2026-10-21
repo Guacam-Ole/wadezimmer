@@ -60,6 +60,7 @@ func testInboxProcessingWarning(t *testing.T, mailFailure bool) {
 		t.Fatal(err)
 	}
 	t.Cleanup(base.Cleanup)
+	drainTestAppStartupLogs(t, base)
 	actors := core.NewBaseCollection("activitypub_actors")
 	actors.Fields.Add(&core.TextField{Name: "iri"}, &core.TextField{Name: "inbox"}, &core.TextField{Name: "domain"}, &core.TextField{Name: "public_key"}, &core.BoolField{Name: "is_local"}, &core.TextField{Name: "user"}, &core.TextField{Name: "username"}, &core.TextField{Name: "preferred_username"})
 	if err := base.Save(actors); err != nil {

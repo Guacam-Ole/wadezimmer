@@ -36,6 +36,7 @@ func TestRemoteSyncExplicitlyBoundsRichText(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(app.Cleanup)
+	drainTestAppStartupLogs(t, app)
 	app.OnRecordValidate().BindFunc(util.SanitizeHTML())
 	save := func(model core.Model) {
 		t.Helper()

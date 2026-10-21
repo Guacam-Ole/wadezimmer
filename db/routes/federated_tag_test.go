@@ -35,6 +35,7 @@ func setupFederatedTagImport(t *testing.T) (*pbtests.TestApp, *core.Collection, 
 		t.Fatal(err)
 	}
 	t.Cleanup(app.Cleanup)
+	drainTestAppStartupLogs(t, app)
 	save := func(model core.Model) {
 		t.Helper()
 		if err := app.Save(model); err != nil {

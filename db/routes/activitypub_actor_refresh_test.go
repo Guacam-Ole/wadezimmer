@@ -29,6 +29,7 @@ func TestInboxRefreshesInconsistentActorBeforeCheckingSignature(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(app.Cleanup)
+			drainTestAppStartupLogs(t, app)
 			actors := core.NewBaseCollection("activitypub_actors")
 			actors.Fields.Add(&core.TextField{Name: "iri"}, &core.TextField{Name: "inbox"}, &core.TextField{Name: "domain"}, &core.TextField{Name: "public_key"})
 			if err := app.Save(actors); err != nil {

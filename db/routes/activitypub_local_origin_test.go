@@ -44,6 +44,7 @@ func TestInboxUsesLocalStoredKeysForOriginsWithPortsAndWWW(t *testing.T) {
 			}
 			app.Settings().Logs.MaxDays = 0
 			t.Cleanup(app.Cleanup)
+			drainTestAppStartupLogs(t, app)
 			add := func(name string, fields ...core.Field) *core.Collection {
 				collection := core.NewBaseCollection(name)
 				collection.Fields.Add(fields...)

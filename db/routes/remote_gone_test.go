@@ -55,6 +55,7 @@ func setupGoneTest(t *testing.T, status int, collection, path string, handler fu
 		t.Fatal(err)
 	}
 	t.Cleanup(app.Cleanup)
+	drainTestAppStartupLogs(t, app)
 
 	actors := core.NewBaseCollection("activitypub_actors")
 	actors.Fields.Add(

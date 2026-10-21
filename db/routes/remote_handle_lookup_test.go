@@ -67,6 +67,7 @@ func setupHandleLookupTest(t *testing.T, origin string, status int) *handleLooku
 		t.Fatal(err)
 	}
 	t.Cleanup(app.Cleanup)
+	drainTestAppStartupLogs(t, app)
 	app.Settings().Logs.MaxDays = 0
 	save := func(c *core.Collection) {
 		if err := app.Save(c); err != nil {
