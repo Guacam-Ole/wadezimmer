@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-fed/httpsig"
 	"github.com/pocketbase/pocketbase/core"
@@ -86,7 +87,8 @@ func TestInboxRefreshesInconsistentActorBeforeCheckingSignature(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "https://local.example"+path, strings.NewReader(body))
 			req.Header.Set("X-Internal-Secret", "refresh-test-secret")
 			req.Header.Set("X-Forwarded-Path", path)
-			signer, _, err := httpsig.NewSigner([]httpsig.Algorithm{httpsig.RSA_SHA256}, httpsig.DigestSha256, []string{"(request-target)"}, httpsig.Signature, 60)
+			req.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
+			signer, _, err := httpsig.NewSigner([]httpsig.Algorithm{httpsig.RSA_SHA256}, httpsig.DigestSha256, []string{"(request-target)", "date", "digest"}, httpsig.Signature, 60)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -94,7 +96,7 @@ func TestInboxRefreshesInconsistentActorBeforeCheckingSignature(t *testing.T) {
 			if scenario == "cached-key" {
 				signingKey = cachedKey
 			}
-			if err := signer.SignRequest(signingKey, iri+"/main-key", req, nil); err != nil {
+			if err := signer.SignRequest(signingKey, iri+"/main-key", req, []byte(body)); err != nil {
 				t.Fatal(err)
 			}
 			e := &core.RequestEvent{App: app}

@@ -15,7 +15,7 @@ import (
 // deletion can also confirm the origin after waiting for a failed refresh or
 // after an earlier request used the refresh claim, once its signature is
 // verified. All paths share one confirmation claim for the full window.
-func inboxActorGoneCheckAllowed(app core.App, ctx context.Context, request *http.Request, actor *core.Record, activity pub.Activity, err error, known bool) bool {
+func inboxActorGoneCheckAllowed(app core.App, ctx context.Context, request *http.Request, body []byte, actor *core.Record, activity pub.Activity, err error, known bool) bool {
 	if actor == nil || activity.Type != pub.DeleteType || activity.Actor == nil || activity.Object == nil || activity.Actor.GetID().String() != actor.GetString("iri") || activity.Object.GetID().String() != actor.GetString("iri") || ctx.Err() != nil {
 		return false
 	}
@@ -35,7 +35,7 @@ func inboxActorGoneCheckAllowed(app core.App, ctx context.Context, request *http
 	// before claiming confirmation work. Other software keeps its existing
 	// permanent-gone confirmation after an actual missing actor response.
 	if !fetchedMissing || util.ObjectKindFromIRI(actor.GetString("iri")) == util.ObjectKindActor {
-		if !legacySelfDeletionSigned(app, request, actor) {
+		if !legacySelfDeletionSigned(app, request, body, actor) {
 			return false
 		}
 	}

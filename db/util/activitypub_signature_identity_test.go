@@ -1,12 +1,14 @@
 package util
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/go-fed/httpsig"
 )
@@ -27,6 +29,7 @@ func TestVerifySignatureBindsKeyIDToActivityActorHost(t *testing.T) {
 	}
 	publicKey := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}))
 	actor := "https://remote.example/api/v1/activitypub/user/alice"
+	body := []byte(`{"type":"Create"}`)
 	for _, tc := range []struct {
 		keyID    string
 		signer   *rsa.PrivateKey
@@ -48,19 +51,20 @@ func TestVerifySignatureBindsKeyIDToActivityActorHost(t *testing.T) {
 		// actor's stored key, so naming that key does not help another key.
 		{keyID: actor + "#main-key", signer: otherKey},
 	} {
-		req, err := http.NewRequest("POST", "https://local.example/inbox", nil)
+		req, err := http.NewRequest("POST", "https://local.example/inbox", bytes.NewReader(body))
 		if err != nil {
 			t.Fatal(err)
 		}
 		req.Header.Set("X-Forwarded-Path", "/inbox")
-		signer, _, err := httpsig.NewSigner([]httpsig.Algorithm{httpsig.RSA_SHA256}, httpsig.DigestSha256, []string{"(request-target)"}, httpsig.Signature, 60)
+		req.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
+		signer, _, err := httpsig.NewSigner([]httpsig.Algorithm{httpsig.RSA_SHA256}, httpsig.DigestSha256, []string{"(request-target)", "Date", "Digest"}, httpsig.Signature, 60)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := signer.SignRequest(tc.signer, tc.keyID, req, nil); err != nil {
+		if err := signer.SignRequest(tc.signer, tc.keyID, req, body); err != nil {
 			t.Fatal(err)
 		}
-		verified, err := VerifySignature(nil, req, publicKey, actor)
+		verified, err := VerifySignature(nil, req, publicKey, body, actor)
 		if tc.verified && (!verified || err != nil) {
 			t.Fatalf("valid signature with key id %q rejected: %v", tc.keyID, err)
 		}

@@ -207,8 +207,8 @@ func ActivitypubActivityProcess(e *core.RequestEvent) error {
 			return e.InternalServerError("Unable to refresh actor", nil)
 		}
 		if err != nil {
-			if inboxActorGoneCheckAllowed(e.App, ctx, e.Request, storedActor, activity, err, knownKeyReload) {
-				legacySigned := func(stored *core.Record) bool { return legacySelfDeletionSigned(e.App, e.Request, stored) }
+			if inboxActorGoneCheckAllowed(e.App, ctx, e.Request, body, storedActor, activity, err, knownKeyReload) {
+				legacySigned := func(stored *core.Record) bool { return legacySelfDeletionSigned(e.App, e.Request, body, stored) }
 				if gone, deletionError := reconcileGoneInboxActor(e.App, ctx, storedActor, activity, legacySigned); gone {
 					if deletionError != nil {
 						e.App.Logger().Warn("remote account cleanup failed", "error", deletionError)
@@ -223,7 +223,7 @@ func ActivitypubActivityProcess(e *core.RequestEvent) error {
 	if actor == nil || (!actor.GetBool("is_local") && !federation.CachedActorIdentityMatchesOrigin(actor)) {
 		return e.UnauthorizedError("Invalid actor identity", nil)
 	}
-	verified, err := util.VerifySignature(e.App, e.Request, actor.GetString("public_key"), activity.Actor.GetID().String())
+	verified, err := util.VerifySignature(e.App, e.Request, actor.GetString("public_key"), body, activity.Actor.GetID().String())
 	if err != nil || !verified {
 		e.App.Logger().Warn("refused activity with invalid HTTP signature", "error", err)
 		return e.UnauthorizedError("Invalid http signature", err)

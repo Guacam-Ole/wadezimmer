@@ -19,6 +19,7 @@ description: What changed in the last patch?
 
 ### Federation
 
+- Incoming ActivityPub deliveries are only accepted with a signed body digest and a current signature date, as Mastodon requires. Deliveries from servers whose clock is off by more than an hour are rejected.
 - Accounts registered before an `ORIGIN` hostname or port change cannot publish new federated content to updated peers. Changing only `http` to `https` remains supported.
 - Trails and lists continue to synchronize with peers older than v0.20.0. Comments and summit logs from v0.19 peers are imported through their individual endpoints.
 - Replies from other ActivityPub software are imported only when publicly addressed and available without a signed request. Reply object retrieval is capped at 30 per refresh, 256 KiB per object and 2 MiB over 10 seconds, with 2 seconds per request.

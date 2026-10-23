@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pub "github.com/go-ap/activitypub"
-	"github.com/go-fed/httpsig"
 	"github.com/pocketbase/pocketbase/core"
 	"pocketbase/util"
 )
@@ -66,16 +65,16 @@ func reconcileGoneInboxActor(app core.App, ctx context.Context, actor *core.Reco
 // legacySelfDeletionSigned verifies a request with the key an actor had
 // before the cache refresh, under the key id wanderer signs with. A key
 // confirmed at the origin since then replaces it.
-func legacySelfDeletionSigned(app core.App, request *http.Request, actor *core.Record) bool {
+func legacySelfDeletionSigned(app core.App, request *http.Request, body []byte, actor *core.Record) bool {
 	key, iri := actor.GetString("legacy_public_key"), actor.GetString("iri")
 	if strings.TrimSpace(key) == "" || strings.TrimSpace(actor.GetString("public_key")) != "" || !legacyKeyFetchedAtActorHost(actor) {
 		return false
 	}
-	verifier, err := httpsig.NewVerifier(request)
-	if err != nil || verifier.KeyId() != iri+"#main-key" {
+	signature, err := util.CheckRequestSignature(request, body, time.Now())
+	if err != nil || signature.KeyID != iri+"#main-key" {
 		return false
 	}
-	verified, err := util.VerifySignature(app, request, key, iri)
+	verified, err := util.VerifySignature(app, request, key, body, iri)
 	return err == nil && verified
 }
 

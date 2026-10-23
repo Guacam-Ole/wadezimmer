@@ -16,7 +16,6 @@ import (
 	"time"
 
 	pub "github.com/go-ap/activitypub"
-	"github.com/go-fed/httpsig"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/pocketbase/pocketbase/tools/security"
@@ -848,7 +847,11 @@ func TrailObjectFromIRI(iri string) (*pub.Object, error) {
 	return &object, nil
 }
 
-func VerifySignature(app core.App, req *http.Request, publicKeyPem string, actorIRI ...string) (bool, error) {
+func VerifySignature(app core.App, req *http.Request, publicKeyPem string, body []byte, actorIRI ...string) (bool, error) {
+	signature, err := CheckRequestSignature(req, body, time.Now())
+	if err != nil {
+		return false, err
+	}
 	origin := os.Getenv("ORIGIN")
 	if origin == "" {
 		return false, fmt.Errorf("ORIGIN not set")
@@ -858,6 +861,7 @@ func VerifySignature(app core.App, req *http.Request, publicKeyPem string, actor
 		return false, fmt.Errorf("could not decode publicKeyPem to PUBLIC KEY pem block type")
 	}
 
+	req = req.Clone(req.Context())
 	req.URL = &url.URL{
 		Path: req.Header.Get("X-Forwarded-Path"),
 	}
@@ -875,15 +879,15 @@ func VerifySignature(app core.App, req *http.Request, publicKeyPem string, actor
 		return false, err
 	}
 
-	v, err := httpsig.NewVerifier(req)
-	if err != nil {
-		return false, err
-	}
-	if len(actorIRI) > 0 && !SignatureKeyIsOnActorHost(v.KeyId(), actorIRI[0]) {
+	if len(actorIRI) > 0 && !SignatureKeyIsOnActorHost(signature.KeyID, actorIRI[0]) {
 		return false, fmt.Errorf("signature key id is not on the activity actor's host")
 	}
 
-	err = v.Verify(publicKey, httpsig.RSA_SHA256)
+	rsaKey, ok := publicKey.(*rsa.PublicKey)
+	if !ok {
+		return false, fmt.Errorf("signature public key is not RSA")
+	}
+	err = signature.verify(req, rsaKey)
 	if err != nil {
 		return false, err
 	}

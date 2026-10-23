@@ -89,14 +89,15 @@ func TestActorHTTPSUpgradeUsesFetchedKeyAndKeepsExistingIdentity(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			req, _ := http.NewRequest(http.MethodPost, "https://local.example/inbox", nil)
 			req.Header.Set("X-Forwarded-Path", "/inbox")
-			signer, _, err := httpsig.NewSigner([]httpsig.Algorithm{httpsig.RSA_SHA256}, httpsig.DigestSha256, []string{"(request-target)"}, httpsig.Signature, 60)
+			req.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
+			signer, _, err := httpsig.NewSigner([]httpsig.Algorithm{httpsig.RSA_SHA256}, httpsig.DigestSha256, []string{"(request-target)", "date", "digest"}, httpsig.Signature, 60)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := signer.SignRequest(tc.key, document+"#main-key", req, nil); err != nil {
+			if err := signer.SignRequest(tc.key, document+"#main-key", req, []byte{}); err != nil {
 				t.Fatal(err)
 			}
-			valid, err := util.VerifySignature(nil, req, fetched.GetString("public_key"), requested)
+			valid, err := util.VerifySignature(nil, req, fetched.GetString("public_key"), []byte{}, requested)
 			if tc.valid && (!valid || err != nil) {
 				t.Fatalf("new origin key rejected: %v", err)
 			}

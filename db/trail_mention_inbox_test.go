@@ -114,11 +114,12 @@ func (f *trailMentionInboxFixture) process(author, recipient *core.Record, body 
 	request := httptest.NewRequest(http.MethodPost, "https://example.com"+path, strings.NewReader(string(body)))
 	request.Header.Set("X-Internal-Secret", "mention-inbox-secret")
 	request.Header.Set("X-Forwarded-Path", path)
-	signer, _, err := httpsig.NewSigner([]httpsig.Algorithm{httpsig.RSA_SHA256}, httpsig.DigestSha256, []string{"(request-target)"}, httpsig.Signature, 60)
+	request.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
+	signer, _, err := httpsig.NewSigner([]httpsig.Algorithm{httpsig.RSA_SHA256}, httpsig.DigestSha256, []string{"(request-target)", "date", "digest"}, httpsig.Signature, 60)
 	if err != nil {
 		return trailMentionInboxResult{err: err}
 	}
-	if err := signer.SignRequest(f.key, author.GetString("iri")+"#main-key", request, nil); err != nil {
+	if err := signer.SignRequest(f.key, author.GetString("iri")+"#main-key", request, body); err != nil {
 		return trailMentionInboxResult{err: err}
 	}
 	response := httptest.NewRecorder()
