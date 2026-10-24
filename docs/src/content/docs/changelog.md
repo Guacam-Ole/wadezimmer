@@ -2,7 +2,7 @@
 title: Changelog
 description: What changed in the last patch?
 ---
-## Unreleased
+## v0.21.2
 
 ### Breaking Changes
 
