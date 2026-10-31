@@ -37,7 +37,7 @@ export async function buildPaginationFixture(dev: boolean) {
                         filter: { q: '', sort: 'name', sortOrder: '+' }
                     } } });
                 `;
-                if (id === '\0fixture:state') return `export const page = { params: { handle: 'tester' } };`;
+                if (id === '\0fixture:state') return `export const page = { params: { handle: 'tester' }, data: { appTitle: 'wanderer' } };`;
                 if (id === '\0fixture:navigation') return 'export function goto() {}';
                 if (id === '\0fixture:toast') return 'export function show_toast() {}';
                 if (id === '\0fixture:i18n') return `
