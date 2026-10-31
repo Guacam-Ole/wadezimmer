@@ -47,10 +47,10 @@ func Stats(e *core.RequestEvent) error {
 		NewQuery(`
 			SELECT
 				COUNT(*) as total_trails,
-				SUM(CASE WHEN public = 1 THEN 1 ELSE 0 END) as total_public,
-				SUM(CASE WHEN public = 0 THEN 1 ELSE 0 END) as total_private,
+				COALESCE(SUM(CASE WHEN public = 1 THEN 1 ELSE 0 END), 0) as total_public,
+				COALESCE(SUM(CASE WHEN public = 0 THEN 1 ELSE 0 END), 0) as total_private,
 				COALESCE(SUM(distance), 0) as total_distance_m,
-				(SELECT COUNT(*) FROM activitypub_actors WHERE isLocal = 1) as total_users,
+				(SELECT COUNT(*) FROM activitypub_actors WHERE is_local = 1) as total_users,
 				COUNT(DISTINCT author) as users_with_trails
 			FROM trails
 		`).
