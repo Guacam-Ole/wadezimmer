@@ -56,7 +56,7 @@ export async function GET(event: RequestEvent) {
 
         const [username, domain] = splitUsername(fullUsername, env.ORIGIN)
 
-        const actor: Actor = await event.locals.pb.collection("activitypub_actors").getFirstListItem(`preferred_username:lower='${username?.toLowerCase()}'&&isLocal=true`)
+        const actor: Actor = await event.locals.pb.collection("activitypub_actors").getFirstListItem(`preferred_username:lower='${username?.toLowerCase()}'&&is_local=true`)
 
         const followers: ListResult<Follow> = await event.locals.pb.collection("follows").getList(intPage, 10, { sort: "-created", filter: `follower='${actor.id}'&&status='accepted'`, expand: "followee" })
 
@@ -79,6 +79,17 @@ export async function GET(event: RequestEvent) {
 
         const headers = new Headers()
         headers.append("Content-Type", "application/activity+json")
+
+        // Without ?page, serve the collection itself (required by GoToSocial).
+        if (!event.url.searchParams.has("page")) {
+            return json({
+                "@context": "https://www.w3.org/ns/activitystreams",
+                id: `${id}/following`,
+                type: "OrderedCollection",
+                totalItems: followers.totalItems,
+                first: `${id}/following?page=1`,
+            }, { headers });
+        }
 
         return json(following, { headers });
     } catch (e) {

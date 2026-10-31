@@ -2,7 +2,7 @@ name: Web CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
     paths:
       - '.github/**'
       - 'web/**'
@@ -14,9 +14,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v6
         with:
@@ -24,15 +25,30 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
+          go-version: '1.26'
 
       - run: make db-build-docker
 
       - run: make web-build-docker
 
-      - run: docker compose up -d
+      - name: Start test stack
+        timeout-minutes: 15
+        env:
+          POCKETBASE_PROXY_SECRET: web-ci-proxy-secret
+        run: docker compose up -d --wait --wait-timeout 840
 
       - run: make web-install
       - run: make web-playwright-install
       - run: make web-check
       - run: make web-test
+
+      - name: Upload Playwright results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-results
+          path: |
+            web/playwright-report/
+            web/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

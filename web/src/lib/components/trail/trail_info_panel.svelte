@@ -1,9 +1,11 @@
 <script lang="ts">
+    import { sanitizeHTML } from "$lib/util/sanitize_html";
     import { goto } from "$app/navigation";
     import { page } from "$app/state";
     import Tabs from "$lib/components/base/tabs.svelte";
     import TrailDropdown, { type MergeResult } from "$lib/components/trail/trail_dropdown.svelte";
     import { Comment } from "$lib/models/comment";
+    import { Tag } from "$lib/models/tag";
     import type { Trail } from "$lib/models/trail";
 
     import {
@@ -18,8 +20,15 @@
     import {
         formatDistance,
         formatElevation,
+        formatHTMLAsTextPreview,
         formatTimeHHMM,
     } from "$lib/util/format_util";
+    import {
+        displayCategoryIcon,
+        displayCategoryName,
+        displaySubcategoryIcon,
+        displaySubcategoryLabel,
+    } from "$lib/util/category_util";
 
     import { browser } from "$app/environment";
     import emptyStateTrailDark from "$lib/assets/svgs/empty_states/empty_state_trail_dark.svg";
@@ -29,7 +38,7 @@
     import * as M from "maplibre-gl";
     import "photoswipe/style.css";
     import { onMount, untrack } from "svelte";
-    import { _ } from "svelte-i18n";
+    import { _, locale } from "svelte-i18n";
     import Button from "../base/button.svelte";
     import Chip from "../base/chip.svelte";
     import SkeletonNotificationCard from "../base/skeleton_notification_card.svelte";
@@ -57,7 +66,14 @@
     import { handleFromRecordWithIRI } from "$lib/util/activitypub_util";
     import LikeButton from "./like_button.svelte";
     import Editor from "../base/editor.svelte";
-    import { trails_update } from "$lib/stores/trail_store";
+    import {
+        trails_update,
+        trails_update_metadata,
+    } from "$lib/stores/trail_store";
+    import Combobox, { type ComboboxItem } from "../base/combobox.svelte";
+    import { tags_index } from "$lib/stores/tag_store";
+    import { withShareToken } from "$lib/util/url_util";
+    import { normalizeNewTagName } from "$lib/util/tag_name";
 
     interface Props {
         initTrail: Trail;
@@ -81,21 +97,33 @@
 
     let trail = $state(untrack(() => initTrail));
 
+    function trailCategoryIcon() {
+        if (trail.expand?.subcategory) {
+            return displaySubcategoryIcon(
+                trail.expand.subcategory,
+                trail.expand?.category,
+            );
+        }
+
+        return displayCategoryIcon(trail.expand?.category);
+    }
+
     const tabs = [
         $_("summit-book"),
         $_("photos"),
         ...($currentUser ? [$_("comment", { values: { n: 2 } })] : []),
     ];
 
-    const trailIsShared =
-        (trail.expand?.trail_share_via_trail?.length ?? 0) > 0;
+    const trailIsShared = $derived(
+        (trail.expand?.trail_share_via_trail?.length ?? 0) > 0,
+    );
 
     let gallery: PhotoGallery;
 
     let newComment: Comment = $state({
         text: "",
         author: "",
-        trail: untrack(() => handle) + "/" + (trail.id ?? ""),
+        trail: untrack(() => `${handle}/${trail.id ?? ""}`),
     });
 
     let commentsLoading: boolean = $state(untrack(() => activeTab == 2));
@@ -106,6 +134,32 @@
     let summitLogCreateLoading: boolean = $state(false);
 
     let fullDescription: boolean = $state(false);
+
+    const DESCRIPTION_PREVIEW_LENGTH = 300;
+
+    let descriptionPreview = $derived(
+        formatHTMLAsTextPreview(trail.description, DESCRIPTION_PREVIEW_LENGTH),
+    );
+    let metadataSaving: boolean = $state(false);
+    let editingName: boolean = $state(false);
+    let editingDescription: boolean = $state(false);
+    let editingTags: boolean = $state(false);
+    let nameDraft: string = $state("");
+    let descriptionDraft: string = $state("");
+    let tagDraftItems: ComboboxItem[] = $state([]);
+    let tagItems: ComboboxItem[] = $state([]);
+
+    const canEditTrail = $derived(
+        Boolean(
+            $currentUser &&
+                (trail.author === $currentUser.actor ||
+                    trail.expand?.trail_share_via_trail?.some(
+                        (share) =>
+                            share.permission === "edit" &&
+                            share.actor === $currentUser.actor,
+                    )),
+        ),
+    );
 
     onMount(async () => {});
 
@@ -124,7 +178,12 @@
     }
 
     async function toggleMapFullScreen() {
-        goto(`/map/trail/${handle}/${trail.id!}`);
+        goto(
+            withShareToken(
+                `/map/trail/${handle}/${trail.id!}`,
+                page.url.searchParams,
+            ),
+        );
     }
 
     async function fetchComments() {
@@ -182,7 +241,7 @@
 
     function getHeaderPhotos() {
         if (trail.photos.length) {
-            return trail.photos.slice(0, 3).map((p) => getFileURL(trail, p));
+            return trail.photos.slice(0, 3).map((p) => getFileURL(trail, p, "600x0"));
         } else {
             return $theme === "light"
                 ? [emptyStateTrailLight]
@@ -285,9 +344,142 @@
     }
 
     async function markTrailAsCompleted() {
-        trail.completed = true;
-        const updatedTrail: Trail = { ...trail };
+        const oldestSummitLogDate = $summitLogs
+            .map((log) => log.date)
+            .sort()[0];
+        const updatedTrail: Trail = {
+            ...trail,
+            completed: true,
+            completed_at: trail.completed_at || oldestSummitLogDate,
+        };
         await trails_update(trail, updatedTrail);
+    }
+
+    function cloneTrail(value: Trail): Trail {
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    function mergeTrailUpdate(previousTrail: Trail, updatedTrail: Trail): Trail {
+        return {
+            ...previousTrail,
+            ...updatedTrail,
+            expand: {
+                ...previousTrail.expand,
+                ...updatedTrail.expand,
+                author: previousTrail.expand?.author,
+                trail_like_via_trail:
+                    previousTrail.expand?.trail_like_via_trail,
+            },
+        };
+    }
+
+    async function saveTrailMetadata(update: (nextTrail: Trail) => void) {
+        if (!canEditTrail || metadataSaving) {
+            return false;
+        }
+
+        metadataSaving = true;
+        const oldTrail = cloneTrail(trail);
+        const nextTrail = cloneTrail(trail);
+        nextTrail.expand ??= {};
+        nextTrail.tags = [...(trail.tags ?? [])];
+        update(nextTrail);
+        const tagsChanged =
+            JSON.stringify(nextTrail.expand?.tags ?? []) !==
+            JSON.stringify(oldTrail.expand?.tags ?? []);
+
+        try {
+            const updatedTrail = await trails_update_metadata(oldTrail, {
+                name:
+                    nextTrail.name !== oldTrail.name
+                        ? nextTrail.name
+                        : undefined,
+                description:
+                    nextTrail.description !== oldTrail.description
+                        ? nextTrail.description
+                        : undefined,
+                expand: tagsChanged ? { tags: nextTrail.expand?.tags } : undefined,
+            });
+            trail = mergeTrailUpdate(trail, updatedTrail);
+            show_toast({
+                icon: "check",
+                type: "success",
+                text: $_("trail-saved-successfully"),
+            });
+            return true;
+        } catch (e) {
+            console.error(e);
+            show_toast({
+                icon: "close",
+                type: "error",
+                text: $_("error-saving-trail"),
+            });
+            return false;
+        } finally {
+            metadataSaving = false;
+        }
+    }
+
+    function startNameEdit() {
+        nameDraft = trail.name;
+        editingName = true;
+    }
+
+    async function saveNameEdit() {
+        const name = nameDraft.trim();
+        if (!name) {
+            return;
+        }
+        const saved = await saveTrailMetadata((nextTrail) => {
+            nextTrail.name = name;
+        });
+        editingName = !saved;
+    }
+
+    function startDescriptionEdit() {
+        descriptionDraft = trail.description ?? "";
+        editingDescription = true;
+    }
+
+    async function saveDescriptionEdit() {
+        const saved = await saveTrailMetadata((nextTrail) => {
+            nextTrail.description = descriptionDraft;
+        });
+        editingDescription = !saved;
+        if (saved) {
+            fullDescription = true;
+        }
+    }
+
+    function getTrailTagItems() {
+        return (
+            trail.expand?.tags?.map((tag) => ({
+                text: tag.name,
+                value: tag,
+            })) ?? []
+        );
+    }
+
+    function startTagsEdit() {
+        tagDraftItems = getTrailTagItems();
+        editingTags = true;
+    }
+
+    async function searchTags(q: string) {
+        const result = await tags_index(q);
+        tagItems = result.items.map((tag) => ({
+            text: tag.name,
+            value: tag,
+        }));
+    }
+
+    async function saveTagsEdit() {
+        const saved = await saveTrailMetadata((nextTrail) => {
+            nextTrail.expand!.tags = tagDraftItems.map((item) =>
+                item.value ? item.value : new Tag(item.text),
+            );
+        });
+        editingTags = !saved;
     }
 </script>
 
@@ -326,7 +518,6 @@
                             onclick={trail.photos.length
                                 ? () => gallery.openGallery(i)
                                 : null}
-                            autoplay
                             loop
                             src={photo}
                         ></video>
@@ -348,12 +539,58 @@
         </section>
         <section class="border-b border-input-border p-8">
             <div class="flex justify-between items-center gap-x-4">
-                {#if trail.expand?.tags && trail.expand.tags.length > 0}
-                    <div class="flex flex-wrap gap-2">
+                {#if editingTags}
+                    <div class="flex-1">
+                        <Combobox
+                            bind:value={tagDraftItems}
+                            normalizeNewItemText={normalizeNewTagName}
+                            onupdate={searchTags}
+                            items={tagItems}
+                            placeholder={`${$_("tags")}...`}
+                            multiple
+                            chips
+                        ></Combobox>
+                        <div class="flex gap-2 mt-3">
+                            <button
+                                class="btn-secondary"
+                                type="button"
+                                disabled={metadataSaving}
+                                onclick={() => (editingTags = false)}
+                                >{$_("cancel")}</button
+                            >
+                            <Button
+                                primary
+                                type="button"
+                                loading={metadataSaving}
+                                onclick={saveTagsEdit}>{$_("save")}</Button
+                            >
+                        </div>
+                    </div>
+                {:else if trail.expand?.tags && trail.expand.tags.length > 0}
+                    <div class="group flex flex-wrap items-center gap-2">
                         {#each trail.expand.tags as tag}
                             <Chip text={tag.name} primary={false}></Chip>
                         {/each}
+                        {#if canEditTrail}
+                            <button
+                                class="btn-icon tooltip opacity-0 hover:opacity-100 focus:opacity-100 group-hover:opacity-100 transition-opacity"
+                                type="button"
+                                aria-label={$_("tags")}
+                                data-title={$_("tags")}
+                                onclick={startTagsEdit}
+                                ><i class="fa fa-pen text-sm"></i></button
+                            >
+                        {/if}
                     </div>
+                {:else if canEditTrail}
+                    <button
+                        class="btn-icon tooltip opacity-0 hover:opacity-100 focus:opacity-100 group-hover:opacity-100 transition-opacity"
+                        type="button"
+                        aria-label={$_("tags")}
+                        data-title={$_("tags")}
+                        onclick={startTagsEdit}
+                        ><i class="fa fa-tags text-sm"></i></button
+                    >
                 {/if}
                 {#if (trail.public || trailIsShared) && $currentUser}
                     <div
@@ -378,15 +615,63 @@
             </div>
             <div class="flex justify-between items-end w-full gap-y-4">
                 <div class=" overflow-hidden">
-                    <h4
-                        title={trail.name}
-                        class="{mode == 'map'
-                            ? 'text-4xl'
-                            : 'text-5xl'} font-bold line-clamp-3 mb-1 wrap-anywhere"
-                        style="line-height: 1.18"
-                    >
-                        {trail.name}
-                    </h4>
+                    {#if editingName}
+                        <div class="flex flex-col gap-3 mb-3">
+                            <input
+                                class="{mode == 'map'
+                                    ? 'text-4xl'
+                                    : 'text-5xl'} font-bold bg-input-background border border-input-border rounded-md px-3 py-2 focus:outline-none focus:border-input-border-focus"
+                                bind:value={nameDraft}
+                                disabled={metadataSaving}
+                                aria-label={$_("name")}
+                                onkeydown={(e) => {
+                                    if (e.key === "Enter") {
+                                        void saveNameEdit();
+                                    } else if (e.key === "Escape") {
+                                        editingName = false;
+                                    }
+                                }}
+                            />
+                            <div class="flex gap-2">
+                                <button
+                                    class="btn-secondary"
+                                    type="button"
+                                    disabled={metadataSaving}
+                                    onclick={() => (editingName = false)}
+                                    >{$_("cancel")}</button
+                                >
+                                <Button
+                                    primary
+                                    type="button"
+                                    loading={metadataSaving}
+                                    disabled={!nameDraft.trim()}
+                                    onclick={saveNameEdit}>{$_("save")}</Button
+                                >
+                            </div>
+                        </div>
+                    {:else}
+                        <div class="group flex items-end gap-2">
+                            <h4
+                                title={trail.name}
+                                class="{mode == 'map'
+                                    ? 'text-4xl'
+                                    : 'text-5xl'} font-bold line-clamp-3 mb-1 wrap-anywhere"
+                                style="line-height: 1.18"
+                            >
+                                {trail.name}
+                            </h4>
+                            {#if canEditTrail}
+                                <button
+                                    class="btn-icon tooltip shrink-0 mb-2 opacity-0 hover:opacity-100 focus:opacity-100 group-hover:opacity-100 transition-opacity"
+                                    type="button"
+                                    aria-label={$_("name")}
+                                    data-title={$_("name")}
+                                    onclick={startNameEdit}
+                                    ><i class="fa fa-pen text-sm"></i></button
+                                >
+                            {/if}
+                        </div>
+                    {/if}
                     {#if trail.date}
                         <h5 class="text-sm text-gray-500">
                             {new Date(trail.date).toLocaleDateString(
@@ -500,10 +785,20 @@
                         >{#if mode == "overview"}
                             {$_("category")}
                         {:else}
-                            <i class="fa fa-route"></i>
+                            <i class="fa {trailCategoryIcon()}"></i>
                         {/if}</span
                     >
-                    <span class="">{$_(trail.expand.category.name)}</span>
+                    <span class="">
+                        {displayCategoryName(trail.expand.category, $locale)}
+                        {#if trail.expand?.subcategory}
+                            <span class="text-gray-500">
+                                / {displaySubcategoryLabel(
+                                    trail.expand.subcategory,
+                                    $locale,
+                                )}
+                            </span>
+                        {/if}
+                    </span>
                 </div>
             {/if}
         </section>
@@ -514,17 +809,47 @@
             class:xl:grid-cols-[1fr_18rem]={mode == "overview"}
         >
             <div class="order-1 xl:-order-1">
-                <h4 class="text-2xl font-semibold my-4">
-                    {$_("description")}
-                </h4>
-                {#if trail.description?.length}
-                    <article
-                        class="text-justify whitespace-pre-line text-sm prose dark:prose-invert"
-                    >
-                        {@html !fullDescription
-                            ? trail.description?.substring(0, 300)
-                            : trail.description}
-                        {#if (trail.description?.length ?? 0) > 300 && !fullDescription}
+                <div class="group flex items-center gap-2 my-4">
+                    <h4 class="text-2xl font-semibold">
+                        {$_("description")}
+                    </h4>
+                    {#if canEditTrail && !editingDescription}
+                        <button
+                            class="btn-icon tooltip opacity-0 hover:opacity-100 focus:opacity-100 group-hover:opacity-100 transition-opacity"
+                            type="button"
+                            aria-label={$_("description")}
+                            data-title={$_("description")}
+                            onclick={startDescriptionEdit}
+                            ><i class="fa fa-pen text-sm"></i></button
+                        >
+                    {/if}
+                </div>
+                {#if editingDescription}
+                    <div class="mb-6">
+                        <Editor
+                            extraClasses="min-h-24"
+                            bind:value={descriptionDraft}
+                        ></Editor>
+                        <div class="flex gap-2 mt-3">
+                            <button
+                                class="btn-secondary"
+                                type="button"
+                                disabled={metadataSaving}
+                                onclick={() => (editingDescription = false)}
+                                >{$_("cancel")}</button
+                            >
+                            <Button
+                                primary
+                                type="button"
+                                loading={metadataSaving}
+                                onclick={saveDescriptionEdit}>{$_("save")}</Button
+                            >
+                        </div>
+                    </div>
+                {:else if trail.description?.length}
+                    <article class="text-justify whitespace-pre-line text-sm">
+                        {#if descriptionPreview.truncated && !fullDescription}
+                            <div>{descriptionPreview.text}</div>
                             <button
                                 onclick={(e) => {
                                     e.stopPropagation();
@@ -536,6 +861,10 @@
                                     >{$_("read-more")}</span
                                 ></button
                             >
+                        {:else}
+                            <div class="prose dark:prose-invert">
+                                {@html sanitizeHTML(trail.description)}
+                            </div>
                         {/if}
                     </article>
                 {:else}
@@ -619,7 +948,7 @@
                                     <img
                                         class="rounded-xl cursor-pointer hover:scale-105 transition-transform"
                                         onclick={() => gallery.openGallery(i)}
-                                        src={getFileURL(trail, photo)}
+                                        src={getFileURL(trail, photo, "600x0")}
                                         alt=""
                                     />
                                 {/if}
@@ -638,6 +967,7 @@
                                     src={getFileURL(
                                         $currentUser,
                                         $currentUser.avatar,
+                                        "100x100",
                                     ) ||
                                         `https://api.dicebear.com/7.x/initials/svg?seed=${$currentUser.username?.toLowerCase()}&backgroundType=gradientLinear`}
                                     alt="avatar"

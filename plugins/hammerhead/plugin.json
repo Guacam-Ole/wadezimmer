@@ -1,0 +1,136 @@
+{
+  "manifestVersion": "1.0",
+  "id": "hammerhead",
+  "type": "trails",
+  "name": "Hammerhead",
+  "description": "Imports Hammerhead routes and activities, and can send wanderer routes to Hammerhead.",
+  "version": "0.1.2",
+  "runtime": {
+    "type": "wasm",
+    "entrypoint": "plugin.wasm"
+  },
+  "capabilities": [
+    {
+      "name": "list_routes",
+      "version": "v1",
+      "export": "list_routes_v1"
+    },
+    {
+      "name": "get_route_detail",
+      "version": "v1",
+      "export": "get_route_detail_v1"
+    },
+    {
+      "name": "list_activities",
+      "version": "v1",
+      "export": "list_activities_v1"
+    },
+    {
+      "name": "get_activity_detail",
+      "version": "v1",
+      "export": "get_activity_detail_v1"
+    },
+    {
+      "name": "prepare_trail_send",
+      "version": "v1",
+      "export": "prepare_trail_send_v1"
+    }
+  ],
+  "auth": {
+    "contexts": {
+      "provider_session": {
+        "type": "session",
+        "fields": [
+          "email",
+          "password"
+        ],
+        "secretFields": [
+          "password"
+        ],
+        "refresh": {
+          "mode": "plugin",
+          "function": "refresh_session_v1"
+        }
+      }
+    }
+  },
+  "permissions": {
+    "network": {
+      "connectors": [
+        {
+          "name": "api",
+          "type": "public_api",
+          "fixedBaseURL": "https://dashboard.hammerhead.io",
+          "allowedPathPrefixes": [
+            "/v1"
+          ],
+          "auth": [
+            "provider_session"
+          ]
+        }
+      ]
+    },
+    "auth": [
+      "provider_session"
+    ],
+    "uploads": {
+      "maxBytes": 25000000,
+      "contentTypes": [
+        "application/json",
+        "multipart/form-data"
+      ]
+    },
+    "downloads": {
+      "maxBytes": 16777216,
+      "contentTypes": [
+        "application/json"
+      ]
+    }
+  },
+  "configSchema": [
+    {
+      "key": "after",
+      "type": "date",
+      "label": "Start date",
+      "labels": {
+        "de": "Startdatum",
+        "en": "Start date"
+      },
+      "description": "Ignore routes and activities before this date.",
+      "descriptions": {
+        "de": "Wenn dein Konto viele Routen und Aktivitäten enthält, können zahlreiche API-Anfragen dazu führen, dass Hammerhead den Zugriff vorübergehend einschränkt. Lege ein Startdatum fest, um die Importmenge zu reduzieren; dann werden nur Inhalte nach diesem Datum synchronisiert.",
+        "en": "If your account contains many routes and activities, a large number of API requests may cause Hammerhead to temporarily restrict access. Set a start date to reduce the import volume so that only content after that date is synchronized.",
+        "no": "Hvis kontoen din inneholder mange ruter og aktiviteter, kan et stort antall API-forespørsler føre til at Hammerhead midlertidig begrenser tilgangen. Angi en startdato for å redusere importmengden, slik at bare innhold etter denne datoen synkroniseres."
+      }
+    }
+  ],
+  "hostConfig": {
+    "categoryMapping": {
+      "biking": "Biking"
+    }
+  },
+  "metadata": {
+    "descriptions": {
+      "de": "Importiert Hammerhead-Routen und Aktivitäten und kann wanderer-Routen an Hammerhead senden.",
+      "en": "Imports Hammerhead routes and activities, and can send wanderer routes to Hammerhead.",
+      "no": "Synkroniserer Hammerhead-turene dine med Wanderer med jevne mellomrom."
+    },
+    "information": {
+      "de": "Dieses Plugin verbindet wanderer mit deinem Hammerhead-Konto. Es importiert geplante Routen und abgeschlossene Aktivitäten und kann in wanderer erstellte Routen an Hammerhead senden. Neue und aktualisierte Inhalte werden bei den regelmäßig ausgeführten Synchronisierungsläufen importiert. Ein Startdatum begrenzt die Importmenge und reduziert das Risiko, dass Hammerhead den Zugriff wegen zu vieler API-Anfragen vorübergehend einschränkt.",
+      "en": "This plugin connects wanderer with your Hammerhead account. It imports planned routes and completed activities, and can send routes created in wanderer to Hammerhead. New and updated content is imported during the regularly scheduled synchronization runs. A start date limits the import volume and reduces the risk of Hammerhead temporarily restricting access because of too many API requests."
+    },
+    "homepageUrl": "https://dashboard.hammerhead.io/",
+    "icons": {
+      "light": "icon.svg",
+      "dark": "icon_dark.svg"
+    },
+    "providerCategories": {
+      "biking": {
+        "labels": {
+          "de": "Radfahren",
+          "en": "Biking"
+        }
+      }
+    }
+  }
+}

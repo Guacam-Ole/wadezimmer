@@ -149,14 +149,207 @@
  *       properties:
  *         name:
  *           type: string
- *           description: Tag name
+ *           maxLength: 5000
+ *           pattern: '^[^\u0000-\u001f\u007f]*$(?![\s\S])'
+ *           description: Plain-text tag name. Empty names, Unicode, punctuation, and literal markup are preserved. C0 and DEL controls are rejected. Length is measured in Unicode code points.
  *
  *     TagUpdateInput:
  *       type: object
  *       properties:
  *         name:
  *           type: string
- *           description: Tag name
+ *           maxLength: 5000
+ *           pattern: '^[^\u0000-\u001f\u007f]*$(?![\s\S])'
+ *           description: Plain-text tag name. Empty names, Unicode, punctuation, and literal markup are preserved. C0 and DEL controls are rejected. Length is measured in Unicode code points.
+ *
+ *     CategoryTranslation:
+ *       type: object
+ *       properties:
+ *         name:
+ *           type: string
+ *         short_name:
+ *           type: string
+ *
+ *     Category:
+ *       type: object
+ *       required:
+ *         - id
+ *         - name
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: Category ID (15 chars)
+ *         name:
+ *           type: string
+ *         short_name:
+ *           type: string
+ *           nullable: true
+ *         icon:
+ *           type: string
+ *           nullable: true
+ *         translations:
+ *           type: object
+ *           nullable: true
+ *           additionalProperties:
+ *             $ref: '#/components/schemas/CategoryTranslation'
+ *         settings:
+ *           type: object
+ *           nullable: true
+ *           properties:
+ *             wp_merge_enabled:
+ *               type: boolean
+ *             wp_merge_radius:
+ *               type: number
+ *         created:
+ *           type: string
+ *           format: date-time
+ *         updated:
+ *           type: string
+ *           format: date-time
+ *
+ *     Subcategory:
+ *       type: object
+ *       required:
+ *         - id
+ *         - category
+ *         - name
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: Subcategory ID (15 chars)
+ *         category:
+ *           type: string
+ *           description: Parent category ID (15 chars)
+ *         name:
+ *           type: string
+ *         short_name:
+ *           type: string
+ *           nullable: true
+ *         icon:
+ *           type: string
+ *           nullable: true
+ *         badge_icon:
+ *           type: string
+ *           nullable: true
+ *         translations:
+ *           type: object
+ *           nullable: true
+ *           additionalProperties:
+ *             $ref: '#/components/schemas/CategoryTranslation'
+ *         created:
+ *           type: string
+ *           format: date-time
+ *         updated:
+ *           type: string
+ *           format: date-time
+ *
+ *     UserCategoryPreference:
+ *       type: object
+ *       required:
+ *         - id
+ *         - user
+ *         - category
+ *         - visible
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: Preference ID (15 chars)
+ *         user:
+ *           type: string
+ *           description: User ID (15 chars)
+ *         category:
+ *           type: string
+ *           description: Category ID (15 chars)
+ *         visible:
+ *           type: boolean
+ *         priority:
+ *           type: integer
+ *           nullable: true
+ *         created:
+ *           type: string
+ *           format: date-time
+ *         updated:
+ *           type: string
+ *           format: date-time
+ *
+ *     UserCategoryPreferenceUpsertInput:
+ *       type: object
+ *       required:
+ *         - category
+ *         - visible
+ *       properties:
+ *         category:
+ *           type: string
+ *           description: Category ID (15 chars)
+ *         visible:
+ *           type: boolean
+ *
+ *     UserCategoryPreferenceReorderInput:
+ *       type: object
+ *       required:
+ *         - categories
+ *       properties:
+ *         categories:
+ *           type: array
+ *           items:
+ *             type: string
+ *             description: Category ID (15 chars)
+ *
+ *     UserSubcategoryPreference:
+ *       type: object
+ *       required:
+ *         - id
+ *         - user
+ *         - subcategory
+ *         - visible
+ *       properties:
+ *         id:
+ *           type: string
+ *           description: Preference ID (15 chars)
+ *         user:
+ *           type: string
+ *           description: User ID (15 chars)
+ *         subcategory:
+ *           type: string
+ *           description: Subcategory ID (15 chars)
+ *         visible:
+ *           type: boolean
+ *         priority:
+ *           type: integer
+ *           nullable: true
+ *         created:
+ *           type: string
+ *           format: date-time
+ *         updated:
+ *           type: string
+ *           format: date-time
+ *
+ *     UserSubcategoryPreferenceUpsertInput:
+ *       type: object
+ *       required:
+ *         - subcategory
+ *         - visible
+ *       properties:
+ *         subcategory:
+ *           type: string
+ *           description: Subcategory ID (15 chars)
+ *         visible:
+ *           type: boolean
+ *
+ *     UserSubcategoryPreferenceReorderInput:
+ *       type: object
+ *       required:
+ *         - category
+ *         - subcategories
+ *       properties:
+ *         category:
+ *           type: string
+ *           description: Category ID (15 chars)
+ *         subcategories:
+ *           type: array
+ *           items:
+ *             type: string
+ *             description: Subcategory ID (15 chars)
  *
  *     Trail:
  *       type: object
@@ -165,6 +358,7 @@
  *         - name
  *         - author
  *         - public
+ *         - completed
  *       properties:
  *         id:
  *           type: string
@@ -184,6 +378,11 @@
  *           format: date
  *         public:
  *           type: boolean
+ *         completed:
+ *           type: boolean
+ *         completed_at:
+ *           type: string
+ *           format: date-time
  *         difficulty:
  *           type: string
  *           enum: [easy, moderate, difficult]
@@ -220,6 +419,9 @@
  *         category:
  *           type: string
  *           description: Category ID (15 chars)
+ *         subcategory:
+ *           type: string
+ *           description: Subcategory ID (15 chars)
  *         tags:
  *           type: array
  *           items:
@@ -240,6 +442,7 @@
  *         - name
  *         - author
  *         - public
+ *         - completed
  *       properties:
  *         id:
  *           type: string
@@ -259,6 +462,11 @@
  *           format: date
  *         public:
  *           type: boolean
+ *         completed:
+ *           type: boolean
+ *         completed_at:
+ *           type: string
+ *           format: date-time
  *         difficulty:
  *           type: string
  *           enum: [easy, moderate, difficult]
@@ -290,6 +498,8 @@
  *           default: 0
  *         category:
  *           type: string
+ *         subcategory:
+ *           type: string
  *         tags:
  *           type: array
  *           items:
@@ -312,6 +522,11 @@
  *           format: date
  *         public:
  *           type: boolean
+ *         completed:
+ *           type: boolean
+ *         completed_at:
+ *           type: string
+ *           format: date-time
  *         difficulty:
  *           type: string
  *           enum: [easy, moderate, difficult]
@@ -347,6 +562,8 @@
  *           type: integer
  *           default: 0
  *         category:
+ *           type: string
+ *         subcategory:
  *           type: string
  *         tags:
  *           type: array
@@ -444,6 +661,23 @@
  *         updated:
  *           type: string
  *           format: date-time
+ *
+ *     StatisticActivity:
+ *       allOf:
+ *         - $ref: '#/components/schemas/SummitLog'
+ *         - type: object
+ *           required:
+ *             - source
+ *             - collectionId
+ *             - collectionName
+ *           properties:
+ *             source:
+ *               type: string
+ *               enum: [summit_log, completed_trail]
+ *             collectionId:
+ *               type: string
+ *             collectionName:
+ *               type: string
  *
  *     SummitLogInput:
  *       type: object
@@ -917,106 +1151,6 @@
  *         followee:
  *           type: string
  *           description: Followee user ID (15 chars)
- *
- *     Integration:
- *       type: object
- *       required:
- *         - id
- *         - user
- *       properties:
- *         id:
- *           type: string
- *           description: Integration ID (15 chars)
- *         user:
- *           type: string
- *           description: User ID (15 chars)
- *         strava:
- *           type: object
- *           properties:
- *             clientId:
- *               type: integer
- *             clientSecret:
- *               type: string
- *             routes:
- *               type: boolean
- *             activities:
- *               type: boolean
- *             active:
- *               type: boolean
- *             after:
- *               type: string
- *               format: date
- *             privacy:
- *               type: string
- *               enum: [original, settings]
- *         komoot:
- *           type: object
- *           properties:
- *             email:
- *               type: string
- *               format: email
- *             password:
- *               type: string
- *             completed:
- *               type: boolean
- *             planned:
- *               type: boolean
- *             active:
- *               type: boolean
- *             privacy:
- *               type: string
- *               enum: [original, settings]
- *         hammerhead:
- *           type: object
- *           properties:
- *             email:
- *               type: string
- *               format: email
- *             password:
- *               type: string
- *             completed:
- *               type: boolean
- *             planned:
- *               type: boolean
- *             active:
- *               type: boolean
- *             after:
- *               type: string
- *               format: date
- *         created:
- *           type: string
- *           format: date-time
- *         updated:
- *           type: string
- *           format: date-time
- *
- *     IntegrationInput:
- *       type: object
- *       required:
- *         - user
- *       properties:
- *         user:
- *           type: string
- *           description: User ID (15 chars)
- *         strava:
- *           type: object
- *         komoot:
- *           type: object
- *         hammerhead:
- *           type: object
- *
- *     IntegrationUpdateInput:
- *       type: object
- *       properties:
- *         strava:
- *           type: object
- *           nullable: true
- *         komoot:
- *           type: object
- *           nullable: true
- *         hammerhead:
- *           type: object
- *           nullable: true
  *
  *     Notification:
  *       type: object

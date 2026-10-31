@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { page } from "$app/state";
     import { goto } from "$app/navigation";
     import MergeDialog from "$lib/components/trail/trail_merge_dialog.svelte";
     import TrailListItem from "$lib/components/trail/trail_list_item.svelte";
@@ -217,7 +218,7 @@
 </script>
 
 <svelte:head>
-    <title>{$_("similar-trails-maintenance-title")} | wanderer</title>
+    <title>{$_("similar-trails-maintenance-title")} | {page.data.appTitle}</title>
 </svelte:head>
 
 <div class="space-y-6">
