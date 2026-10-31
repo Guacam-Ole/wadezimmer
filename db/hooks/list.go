@@ -1,8 +1,12 @@
 package hooks
 
 import (
+	"context"
+	"fmt"
+	"os"
 	"pocketbase/federation"
 	"pocketbase/util"
+	"time"
 
 	pub "github.com/go-ap/activitypub"
 	"github.com/meilisearch/meilisearch-go"
@@ -18,20 +22,32 @@ func CreateListHandler(client meilisearch.ServiceManager) func(e *core.RecordEve
 			return err
 		}
 
-		if err := util.IndexLists(e.App, []*core.Record{record}, client); err != nil {
-			return err
+		// add local iri
+		origin := os.Getenv("ORIGIN")
+		if origin == "" {
+			return fmt.Errorf("ORIGIN not set")
+		}
+		if e.Record.GetString("iri") == "" {
+			e.Record.Set("iri", fmt.Sprintf("%s/api/v1/list/%s", origin, e.Record.Id))
+			if err = e.App.UnsafeWithoutHooks().Save(e.Record); err != nil {
+				return err
+			}
 		}
 
-		if !author.GetBool("isLocal") {
-			// this happens if someone fetches a remote list
-			// we create a stub list record for later reference
-			// no need to create an activity for that
-			return e.Next()
+		if err := util.IndexLists(e.App, []*core.Record{record}, client); err != nil {
+			return err
 		}
 
 		err = e.Next()
 		if err != nil {
 			return err
+		}
+
+		if !author.GetBool("is_local") {
+			// this happens if someone fetches a remote list
+			// we create a stub list record for later reference
+			// no need to create an activity for that
+			return nil
 		}
 
 		err = federation.CreateListActivity(e.App, e.Record, pub.CreateType)
@@ -61,7 +77,7 @@ func UpdateListHandler(client meilisearch.ServiceManager) func(e *core.RecordEve
 			return err
 		}
 
-		if !author.GetBool("isLocal") {
+		if !author.GetBool("is_local") {
 			// this happens if someone fetches a remote list
 			// we create a stub list record for later reference
 			// no need to create an activity for that
@@ -73,7 +89,7 @@ func UpdateListHandler(client meilisearch.ServiceManager) func(e *core.RecordEve
 			return err
 		}
 
-		err = federation.CreateListActivity(e.App, e.Record, pub.CreateType)
+		err = federation.CreateListActivity(e.App, e.Record, pub.UpdateType)
 		if err != nil {
 			return err
 		}
@@ -82,15 +98,48 @@ func UpdateListHandler(client meilisearch.ServiceManager) func(e *core.RecordEve
 	}
 }
 
+const listDeleteRecipientsKey = "__delete_recipients"
+
+// CollectListDeleteRecipientsHandler is CollectTrailDeleteRecipientsHandler
+// for a list: the shares naming its recipients are cascaded away with it.
+func CollectListDeleteRecipientsHandler() func(e *core.RecordEvent) error {
+	return func(e *core.RecordEvent) error {
+		list := e.Record
+		audience, err := federation.ListDeleteRecipients(e.App, list, list.GetBool("public"))
+		if err != nil {
+			e.App.Logger().Error(
+				"could not collect recipients to announce list deletion to",
+				"list", list.Id, "error", err,
+			)
+			audience = federation.DeleteAudience{}
+		}
+		list.Set(listDeleteRecipientsKey, audience)
+		return e.Next()
+	}
+}
+
 func DeleteListHandler(client meilisearch.ServiceManager) func(e *core.RecordEvent) error {
 	return func(e *core.RecordEvent) error {
 		record := e.Record
-		_, err := client.Index("lists").DeleteDocument(record.Id, nil)
+		ctx, cancel := context.WithTimeout(e.Context, 5*time.Second)
+		defer cancel()
+		task, err := client.Index("lists").DeleteDocumentWithContext(ctx, record.Id, nil)
 		if err != nil {
-			return err
+			e.App.Logger().Warn("list deletion could not be queued in search index",
+				"list", record.Id, "error", err)
+		} else {
+			completed, err := client.WaitForTaskWithContext(ctx, task.TaskUID, 50*time.Millisecond)
+			if err != nil {
+				e.App.Logger().Warn("list deletion not confirmed by search index",
+					"list", record.Id, "task", task.TaskUID, "error", err)
+			} else if completed.Status != meilisearch.TaskStatusSucceeded {
+				e.App.Logger().Error("search index failed to delete list",
+					"list", record.Id, "task", task.TaskUID, "status", completed.Status)
+			}
 		}
 
-		err = federation.CreateListDeleteActivity(e.App, record)
+		audience, _ := record.GetRaw(listDeleteRecipientsKey).(federation.DeleteAudience)
+		err = federation.CreateListDeleteActivity(e.App, record, audience)
 		if err != nil {
 			return err
 		}

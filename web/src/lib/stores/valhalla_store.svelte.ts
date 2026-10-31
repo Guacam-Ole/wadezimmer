@@ -6,6 +6,7 @@ import Waypoint from "$lib/models/gpx/waypoint";
 import { type RoutingOptions, type ValhallaAnchor, type ValhallaHeightResponse, type ValhallaRouteResponse } from "$lib/models/valhalla";
 import { APIError } from "$lib/util/api_util";
 import { decodePolyline, encodePolyline } from "$lib/util/polyline_util";
+import { renderValhallaAnchorMarker, valhallaAnchorTitle } from "$lib/util/valhalla_anchor_util";
 import { applyChangeset, diff, revertChangeset, type Changeset } from 'json-diff-ts';
 import type { LngLat } from "maplibre-gl";
 import { _ } from "svelte-i18n";
@@ -16,8 +17,8 @@ const emtpyTrack = new Track({ trkseg: [] })
 class ValhallaStore {
     route: GPX = $state(new GPX({ trk: [emtpyTrack] }));
     anchors: ValhallaAnchor[] = $state([]);
-    undoStack: { delta: Changeset, reverseDelta: Changeset }[] = $state([]);
-    redoStack: { delta: Changeset, reverseDelta: Changeset }[] = $state([]);
+    undoStack: { delta: Changeset, reverseDelta: Changeset, anchorsBefore?: ValhallaAnchor[], anchorsAfter?: ValhallaAnchor[], reversesRoute?: boolean }[] = $state([]);
+    redoStack: { delta: Changeset, reverseDelta: Changeset, anchorsBefore?: ValhallaAnchor[], anchorsAfter?: ValhallaAnchor[], reversesRoute?: boolean }[] = $state([]);
 }
 
 export const valhallaStore = new ValhallaStore();
@@ -170,6 +171,7 @@ export function reverseRoute() {
     const reverseDelta = diff(snapshot, valhallaStore.route);
     valhallaStore.route = applyChangeset(valhallaStore.route, delta);
     pushToUndoStack(delta, reverseDelta)
+    valhallaStore.undoStack[valhallaStore.undoStack.length - 1].reversesRoute = true
 
     valhallaStore.route.features = valhallaStore.route.getTotals();
 
@@ -179,14 +181,21 @@ export function reverseRoute() {
         if (!a.marker) {
             return;
         }
-        a.marker.getElement().textContent = "" + (i + 1);
+        renderValhallaAnchorMarker(
+            a.marker.getElement(),
+            i,
+            valhallaStore.anchors.length,
+        );
 
         const anchorPopupHeading = a.marker
             .getPopup()
             ._content.getElementsByTagName("h5")[0];
         if (anchorPopupHeading) {
-            anchorPopupHeading.textContent =
-                get(_)("route-point") + " #" + (i + 1);
+            anchorPopupHeading.textContent = valhallaAnchorTitle(
+                i,
+                valhallaStore.anchors.length,
+                get(_),
+            );
         }
     });
 }
@@ -235,8 +244,8 @@ export async function splitSegment(index: number, pos: LngLat) {
     const firstSegmentPoints = [...points.slice(0, bestSplitIndex), intersectionPoint];
     const secondSegmentPoints = [intersectionPoint, ...points.slice(bestSplitIndex)];
 
-    editRoute(index, firstSegmentPoints)
-    insertIntoRoute(secondSegmentPoints, index + 1)
+    await editRoute(index, firstSegmentPoints)
+    await insertIntoRoute(secondSegmentPoints, index + 1)
 
 }
 
@@ -263,10 +272,18 @@ export function normalizeRouteTime() {
 export function undo() {
     const historyItem = valhallaStore.undoStack.pop()
     if (!historyItem) {
-        return
+        return undefined
     }
     valhallaStore.redoStack.push(historyItem)
 
+    valhallaStore.route = applyChangeset(valhallaStore.route, historyItem.reverseDelta);
+    valhallaStore.route.features = valhallaStore.route.getTotals();
+    return historyItem;
+}
+
+export function revertRouteChange() {
+    const historyItem = valhallaStore.undoStack.pop();
+    if (!historyItem) return;
     valhallaStore.route = applyChangeset(valhallaStore.route, historyItem.reverseDelta);
     valhallaStore.route.features = valhallaStore.route.getTotals();
 }
@@ -274,10 +291,11 @@ export function undo() {
 export function redo() {
     const historyItem = valhallaStore.redoStack.pop()
     if (!historyItem) {
-        return
+        return undefined
     }
     valhallaStore.undoStack.push(historyItem)
 
     valhallaStore.route = applyChangeset(valhallaStore.route, historyItem.delta);
     valhallaStore.route.features = valhallaStore.route.getTotals();
+    return historyItem;
 }

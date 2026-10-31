@@ -3,11 +3,8 @@ package federation
 import (
 	"database/sql"
 	"fmt"
-	"net/url"
 	"os"
-	"path"
 	"pocketbase/util"
-	"strings"
 	"time"
 
 	"github.com/pocketbase/dbx"
@@ -114,19 +111,21 @@ func ProcessAnnounceActivity(app core.App, actor *core.Record, activity pub.Acti
 
 	object := activity.Object.GetID().String()
 
-	if strings.Contains(object, "/api/v1/trail") {
-		processTrailAnnounceActivity(app, actor, activity)
-
-	} else if strings.Contains(object, "/api/v1/list") {
-		processListAnnounceActivity(app, actor, activity)
-	} else {
+	switch util.ObjectKindFromIRI(object) {
+	case util.ObjectKindTrail:
+		return processTrailAnnounceActivity(app, actor, activity)
+	case util.ObjectKindList:
+		return processListAnnounceActivity(app, actor, activity)
+	default:
 		return fmt.Errorf("unknown announce type")
 	}
-	return nil
 
 }
 
 func processTrailAnnounceActivity(app core.App, actor *core.Record, activity pub.Activity) error {
+	if len(activity.To) == 0 {
+		return fmt.Errorf("announce has no recipient")
+	}
 
 	objectActor, err := app.FindFirstRecordByData("activitypub_actors", "iri", activity.To[0].GetID().String())
 	if err != nil {
@@ -134,7 +133,7 @@ func processTrailAnnounceActivity(app core.App, actor *core.Record, activity pub
 	}
 
 	var trail *core.Record
-	if !actor.GetBool("isLocal") {
+	if !actor.GetBool("is_local") {
 		trail, err = util.TrailFromActivity(activity, app, actor)
 		if err != nil {
 			return err
@@ -180,14 +179,12 @@ func processTrailAnnounceActivity(app core.App, actor *core.Record, activity pub
 			return err
 		}
 	} else {
-		trailUrl, err := url.Parse(activity.Object.GetID().String())
+		trail, err = app.FindFirstRecordByData("trails", "iri", activity.Object.GetID().String())
 		if err != nil {
 			return err
 		}
-		trailId := path.Base(trailUrl.Path)
-		trail, err = app.FindRecordById("trails", trailId)
-		if err != nil {
-			return err
+		if trail.GetString("author") != actor.Id {
+			return fmt.Errorf("announce signer does not own the trail")
 		}
 	}
 
@@ -210,6 +207,9 @@ func processTrailAnnounceActivity(app core.App, actor *core.Record, activity pub
 }
 
 func processListAnnounceActivity(app core.App, actor *core.Record, activity pub.Activity) error {
+	if len(activity.To) == 0 {
+		return fmt.Errorf("announce has no recipient")
+	}
 
 	objectActor, err := app.FindFirstRecordByData("activitypub_actors", "iri", activity.To[0].GetID().String())
 	if err != nil {
@@ -217,7 +217,7 @@ func processListAnnounceActivity(app core.App, actor *core.Record, activity pub.
 	}
 
 	var list *core.Record
-	if !actor.GetBool("isLocal") {
+	if !actor.GetBool("is_local") {
 		list, err = util.ListFromActivity(activity, app, actor)
 		if err != nil {
 			return err
@@ -245,14 +245,12 @@ func processListAnnounceActivity(app core.App, actor *core.Record, activity pub.
 			return err
 		}
 	} else {
-		listUrl, err := url.Parse(activity.Object.GetID().String())
+		list, err = app.FindFirstRecordByData("lists", "iri", activity.Object.GetID().String())
 		if err != nil {
 			return err
 		}
-		listId := path.Base(listUrl.Path)
-		list, err = app.FindRecordById("trails", listId)
-		if err != nil {
-			return err
+		if list.GetString("author") != actor.Id {
+			return fmt.Errorf("announce signer does not own the list")
 		}
 	}
 

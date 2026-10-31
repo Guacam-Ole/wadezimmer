@@ -18,6 +18,13 @@
         if (!browser) {
             return defaultFilter;
         }
+        if (
+            page.url.searchParams.has("category") ||
+            page.url.searchParams.has("subcategory") ||
+            page.url.searchParams.has("author")
+        ) {
+            return defaultFilter;
+        }
 
         const stored = localStorage.getItem(TRAIL_LIST_FILTER_STORAGE_KEY);
         if (!stored) {
@@ -48,7 +55,7 @@
     let loading: boolean = $state(true);
 
     let filter: TrailFilter = $state(restoreStoredFilter(page.data.filter));
-    const pagination: { page: number; totalPages: number; items: number } =
+    let pagination: { page: number; totalPages: number; items: number } =
         $state({
             page: page.url.searchParams.has("page")
                 ? parseInt(page.url.searchParams.get("page")!)
@@ -227,8 +234,8 @@
     <TrailList
         bind:filter
         {loading}
-        {trails}
-        {pagination}
+        bind:trails
+        bind:pagination
         onupdate={() => handleFilterUpdate(false)}
         onpagination={paginate}
         ondisplaychange={handleDisplayModeChange}

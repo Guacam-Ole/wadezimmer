@@ -2,7 +2,7 @@ import { env } from '$env/dynamic/private'
 import { env as envPub } from '$env/dynamic/public'
 import type { Settings } from '$lib/models/settings'
 
-import PocketBase from 'pocketbase'
+import PocketBase, { ClientResponseError } from 'pocketbase'
 import { isRouteProtected } from '$lib/util/authorization_util'
 import { error, json, redirect, text, type Handle } from '@sveltejs/kit'
 import { sequence } from '@sveltejs/kit/hooks'
@@ -11,7 +11,10 @@ import { locale } from 'svelte-i18n'
 import type { Actor } from '$lib/models/activitypub/actor'
 import { normalizeLocale } from '$lib/i18n/locales'
 import { handleError } from '$lib/util/api_util'
+import { apiErrorsAsJson, isApiRequest } from '$lib/server/api_errors'
+import { limitRequestBodies } from '$lib/server/request_body'
 
+const SEARCH_TOKEN_VERSION = 1;
 
 function csrf(allowedPaths: string[]): Handle {
   return async ({ event, resolve }) => {
@@ -27,7 +30,7 @@ function csrf(allowedPaths: string[]): Handle {
 
     if (forbidden) {
       const message = `Cross-site ${request.method} form submissions are forbidden`;
-      if (request.headers.get("accept") === "application/json") {
+      if (isApiRequest(url) || request.headers.get("accept") === "application/json") {
         return json({ message }, { status: 403 });
       }
       return text(message, { status: 403 });
@@ -52,6 +55,20 @@ function isFormContentType(request: Request) {
 
 const auth: Handle = async ({ event, resolve }) => {
   const pb = new PocketBase(envPub.PUBLIC_POCKETBASE_URL)
+  pb.beforeSend = (url, options) => {
+    // Keep a plain object: the SDK reads headers by key after beforeSend
+    // (e.g. to JSON-serialize the body), which a Headers instance breaks.
+    const headers: Record<string, string> = {}
+    for (const [key, value] of Object.entries(options.headers ?? {})) {
+      if (key.toLowerCase() !== 'x-forwarded-for') headers[key] = value
+    }
+    try {
+      headers['X-Forwarded-For'] = event.getClientAddress()
+    } catch {
+      // ADDRESS_HEADER is set but this request has none (e.g. a healthcheck).
+    }
+    return { url, options: { ...options, headers } }
+  }
   const url = new URL(event.request.url);
 
   // Handle API token based auth for API requests
@@ -69,6 +86,14 @@ const auth: Handle = async ({ event, resolve }) => {
         })
         pb.authStore.save(authData.token, authData.record)
       } catch (e) {
+        // Only a 401 rejects the token; a missing auth endpoint or a backend
+        // failure is not a token rejection.
+        if (e instanceof ClientResponseError && e.status === 401) {
+          return json({ message: "invalid_token" }, {
+            status: 401,
+            headers: { "WWW-Authenticate": 'Bearer error="invalid_token"' },
+          })
+        }
         throw error(500, "Failed to verify API token " + e)
       }
 
@@ -85,12 +110,12 @@ const auth: Handle = async ({ event, resolve }) => {
   const currentUserId = pb.authStore.record?.id || 'public';
 
   if (meiliCookie) {
-    const [token, ownerId] = meiliCookie.split('|');
+    const [token, ownerId, version] = meiliCookie.split('|');
 
-    if (ownerId === currentUserId) {
+    if (ownerId === currentUserId && Number(version) === SEARCH_TOKEN_VERSION) {
       meilisearchToken = token;
     } else {
-      // Identity mismatch (e.g. just logged in/out)
+      // Identity mismatch (e.g. just logged in/out) or stale token version
       event.cookies.delete('meilisearch_token', { path: '/' });
     }
   }
@@ -99,7 +124,7 @@ const auth: Handle = async ({ event, resolve }) => {
     try {
       const tokenResponse = await pb.send("/search/token", { method: "GET", fetch: event.fetch });
       meilisearchToken = tokenResponse.token
-      event.cookies.set('meilisearch_token', `${meilisearchToken}|${currentUserId}`, {
+      event.cookies.set('meilisearch_token', `${meilisearchToken}|${currentUserId}|${SEARCH_TOKEN_VERSION}`, {
         path: '/',
         httpOnly: false,
         maxAge: 60 * 60 * 24,
@@ -143,7 +168,7 @@ const auth: Handle = async ({ event, resolve }) => {
 
   if (pb.authStore.record) {
     settings = await pb.collection('settings').getFirstListItem<Settings>(`user="${pb.authStore.record.id}"`, { requestKey: null })
-    actor = await pb.collection("activitypub_actors").getFirstListItem(`isLocal=1&&user='${pb.authStore.record.id}'`)
+    actor = await pb.collection("activitypub_actors").getFirstListItem(`is_local=1&&user='${pb.authStore.record.id}'`)
   }
   const meiliHost = env.MEILI_URL;
   if (!meiliHost) {
@@ -190,4 +215,4 @@ const removeLinkFromHeaders: Handle =
   }
 
 
-export const handle = sequence(csrf(['/api/v1']), auth, removeLinkFromHeaders)
+export const handle = sequence(apiErrorsAsJson, limitRequestBodies, csrf(['/api/v1']), auth, removeLinkFromHeaders)

@@ -3,7 +3,6 @@
     import { Link } from "@tiptap/extension-link";
     import Mention from "@tiptap/extension-mention";
     import Placeholder from "@tiptap/extension-placeholder";
-    import { Underline } from "@tiptap/extension-underline";
     import StarterKit from "@tiptap/starter-kit";
     import { mount, onDestroy, onMount, unmount, untrack } from "svelte";
     import { _ } from "svelte-i18n";
@@ -19,7 +18,7 @@
     import Toggle from "./toggle.svelte";
     import type { SearchItem } from "./search.svelte";
     import type { SuggestionProps } from "@tiptap/suggestion";
-    import type { Actor } from "$lib/models/activitypub/actor";
+    import type { Actor, ActorSearchResult } from "$lib/models/activitypub/actor";
     import { searchActors } from "$lib/stores/search_store";
     import { show_toast } from "$lib/stores/toast_store.svelte";
 
@@ -45,6 +44,11 @@
         extraClasses = "",
         searchListPosition = "absolute",
     }: Props = $props();
+
+    const uid = $props.id();
+    const modalId = `editor-modal-${uid}`;
+    const wrapperId = `editor-wrapper-${uid}`;
+    const mentionListId = `mention-list-${uid}`;
 
     const fontSizes: SelectItem[] = [
         { text: $_("paragraph"), value: "p" },
@@ -74,8 +78,9 @@
         editor = new Editor({
             element: element,
             extensions: [
-                StarterKit,
-                Underline,
+                StarterKit.configure({
+                    link: false,
+                }),
                 Placeholder.configure({
                     placeholder: placeholder,
                 }),
@@ -103,13 +108,13 @@
                         allowToIncludeChar: true,
                         items: async ({ query }) => {
                             try {
-                                const actors: Actor[] = await searchActors(
+                                const actors: ActorSearchResult[] = await searchActors(
                                     query,
                                     true,
                                 );
                                 return actors.map((a) => ({
                                     text: a.username!,
-                                    description: `@${a.preferred_username}${a.isLocal ? "" : "@" + a.domain}`,
+                                    description: `@${a.preferred_username}${a.is_local ? "" : "@" + a.domain}`,
                                     value: a,
                                     icon:
                                         a.icon ||
@@ -130,14 +135,14 @@
                             let component: DropdownList;
                             const componentState: any = $state({
                                 items: [],
-                                id: "mention-list",
+                                id: mentionListId,
                             });
 
                             function updatePosition({
                                 clientRect,
                             }: SuggestionProps) {
                                 const searchListElement =
-                                    document.getElementById("mention-list");
+                                    document.getElementById(mentionListId);
                                 if (!clientRect || !searchListElement) return;
                                 const box = clientRect();
                                 if (!box) {
@@ -155,7 +160,7 @@
                                 return (_: Event, item: SearchItem) => {
                                     props.command({
                                         id: item.value.iri,
-                                        label: `${item.value.preferred_username}${item.value.isLocal ? "" : "@" + item.value.domain}`,
+                                        label: `${item.value.preferred_username}${item.value.is_local ? "" : "@" + item.value.domain}`,
                                     });
                                 };
                             }
@@ -336,7 +341,7 @@
     }
 </script>
 
-<div id="editor-wrapper">
+<div id={wrapperId}>
     {#if label.length}
         <p class="text-sm font-medium mb-1">
             {label}
@@ -451,7 +456,7 @@
     {/if}
 </div>
 <Modal
-    id="editor-modal"
+    id={modalId}
     title={"Insert/edit link"}
     size="md:min-w-lg"
     bind:this={modal}

@@ -16,3 +16,13 @@ data*/
 /.idea/runConfigurations/Web_Dev_Server.xml
 /web/static/md/custom
 /web/.run/
+
+plugins/*/dist/
+plugin_dist/
+
+.planning/
+.impeccable/
+.claude/
+CLAUDE.md
+DESIGN.md
+PRODUCT.md

@@ -48,8 +48,12 @@ export default defineConfig({
           label: 'Authentication',
           link: '/use/authentication/'
         }, {
-          label: 'Create a trail',
+          label: 'Create/Edit a trail',
           link: '/use/create-a-trail/'
+        },
+        {
+          label: 'Categories',
+          link: '/use/categories/'
         },
         {
           label: 'Summit logs',
@@ -83,9 +87,28 @@ export default defineConfig({
           link: '/use/import-export/'
         },
         {
-          label: 'Integrations',
-          link: '/use/integrations/'
+          label: 'Plugins',
+          link: '/use/plugins/'
         },
+        ]
+      },
+      {
+        label: 'Using the app',
+        badge: { text: 'Beta', variant: 'caution' },
+        items: [
+          { label: 'Getting started', link: '/app/getting-started/' },
+          { label: 'What works where', link: '/app/what-works-where/' },
+          { label: 'Find trails', link: '/app/find-trails/' },
+          { label: 'Trail details', link: '/app/trail-details/' },
+          { label: 'Record a trail', link: '/app/record-a-trail/' },
+          { label: 'Plan a route', link: '/app/plan-a-route/' },
+          { label: 'Create & edit a trail', link: '/app/edit-a-trail/' },
+          { label: 'Navigate a trail', link: '/app/navigate-a-trail/' },
+          { label: 'Offline use', link: '/app/offline-use/' },
+          { label: 'Lists', link: '/app/lists/' },
+          { label: 'Profile', link: '/app/profile/' },
+          { label: 'App settings', link: '/app/settings/' },
+          { label: 'Troubleshooting', link: '/app/troubleshooting/' },
         ]
       },
       {
@@ -97,6 +120,7 @@ export default defineConfig({
               { label: 'Quickstart', link: '/run/installation/quick' },
               { label: 'Manual Docker Setup', link: '/run/installation/docker' },
               { label: 'Install from Source', link: '/run/installation/from-source' },
+              { label: 'Plugin installation', link: '/run/installation/plugins' },
             ]
           },
           {
@@ -118,6 +142,9 @@ export default defineConfig({
               { label: 'Backing up your server', link: '/run/backend-configuration/backup-server/' },
               { label: 'Custom categories', link: '/run/backend-configuration/custom-categories/' },
               { label: 'Adjust Filesize Limits', link: '/run/backend-configuration/adjust-filesize-limits/' },
+              { label: 'Mobile app support', link: '/run/backend-configuration/mobile-app/' },
+              { label: 'Region catalogue', link: '/run/backend-configuration/region-catalogue/' },
+              { label: 'Custom map tiles & assets', link: '/run/backend-configuration/map-tiles/' },
             ]
           }
         ]
@@ -130,12 +157,20 @@ export default defineConfig({
             link: '/develop/local-development/'
           },
           {
+            label: 'App development',
+            link: '/develop/app-development/'
+          },
+          {
             label: 'API',
             link: '/develop/api/'
           },
           {
             label: 'Federation',
             link: '/develop/federation/'
+          },
+          {
+            label: 'Plugin System',
+            link: '/develop/plugin-system/'
           },
         ]
       },

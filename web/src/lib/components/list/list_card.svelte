@@ -34,7 +34,7 @@
     <img
         class="w-16 md:w-20 aspect-square rounded-full object-cover"
         src={list.avatar
-            ? getFileURL(list, list.avatar)
+            ? getFileURL(list, list.avatar, "300x300")
             : $theme === "light"
               ? emptyStateTrailLight
               : emptyStateTrailDark}
@@ -43,7 +43,7 @@
 
     <div class="self-start min-w-0 basis-full transition-transform">
         <div class="flex items-center gap-3">
-            <h5 class="text-xl font-semibold overflow-hidden overflow-ellipsis shrink-0 max-w-3/4 whitespace-nowrap">
+            <h5 class="text-xl font-semibold overflow-hidden text-ellipsis shrink-0 max-w-3/4 whitespace-nowrap">
                 {list.name}
             </h5>
             <div class="basis-full"></div>

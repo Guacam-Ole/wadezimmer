@@ -79,7 +79,7 @@ export async function lists_search_filter(filter: ListFilter, page: number = 1, 
 export async function lists_show(id: string, handle?: string, f: (url: RequestInfo | URL, config?: RequestInit) => Promise<Response> = fetch) {
 
     const r = await f(`/api/v1/list/${id}?` + new URLSearchParams({
-        expand: "author,trails,trails.author,trails.category,trails.tags,list_share_via_list.actor",
+        expand: "author,trails,trails.author,trails.category,trails.subcategory,trails.subcategory.category,trails.tags,list_share_via_list.actor",
         ...(handle ? { handle } : {})
     }), {
         method: 'GET',
@@ -87,7 +87,7 @@ export async function lists_show(id: string, handle?: string, f: (url: RequestIn
 
     if (!r.ok) {
         const response = await r.json();
-        throw new APIError(r.status, response.message, response.detail)
+        throw new APIError(r.status, response.message, response.detail ?? response.data)
     }
 
     const response = await r.json()

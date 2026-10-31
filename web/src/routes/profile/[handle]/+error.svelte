@@ -6,7 +6,7 @@
 </script>
 
 <svelte:head>
-    <title>{page.status} | {page.data.appTitle}</title>
+    <title>{page.status} | {page.data?.appTitle ?? "wanderer"}</title>
 </svelte:head>
 <div
     class="m-auto text-center max-w-md"

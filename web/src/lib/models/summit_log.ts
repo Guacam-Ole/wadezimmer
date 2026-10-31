@@ -6,7 +6,7 @@ class SummitLog {
   date: string;
   text?: string;
   gpx?: string;
-  _gpx?: File | null;
+  _gpx?: File | Blob | null;
   photos: string[];
   _photos?: File[];
   distance?: number
@@ -42,6 +42,7 @@ class SummitLog {
 
 interface SummitLogFilter {
   category: string[],
+  subcategory?: string[],
   startDate?: string;
   endDate?: string;
   trail?: string;

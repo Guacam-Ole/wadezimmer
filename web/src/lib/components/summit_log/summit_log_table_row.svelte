@@ -8,7 +8,14 @@
         formatHTMLAsText,
         formatTimeHHMM,
     } from "$lib/util/format_util";
-    import { _ } from "svelte-i18n";
+    import {
+        displayCategoryName,
+        displaySubcategoryLabel,
+        displayTrailCategoryBadgeIcon,
+        displayTrailCategoryIcon,
+        trailCategoryKey,
+    } from "$lib/util/category_util";
+    import { _, locale } from "svelte-i18n";
     import PhotoGallery from "../photo_gallery.svelte";
     import Dropdown, { type DropdownItem } from "../base/dropdown.svelte";
 
@@ -22,6 +29,7 @@
         showDescription?: boolean;
         showPhotos?: boolean;
         showMenu?: boolean;
+        categoryColorMap?: Record<string, string>;
         ontext?: (summitLog: SummitLog) => void;
         onopen?: (summitLog: SummitLog) => void;
         ondelete?: (summitLog: SummitLog) => void;
@@ -38,6 +46,7 @@
         showDescription = false,
         showPhotos = false,
         showMenu = false,
+        categoryColorMap = {},
         onopen,
         ontext,
         ondelete,
@@ -58,12 +67,15 @@
             value: "delete",
         },
     ];
+    let categoryIconColor = $derived(
+        categoryColorMap[trailCategoryKey(log.expand?.trail)],
+    );
     $effect(() => {
         if (log.photos?.length) {
             imgSrc = log.photos
                 .filter((_, i) => i < 3)
                 .reverse()
-                .map((p) => getFileURL(log, p));
+                .map((p) => getFileURL(log, p, "300x300"));
         } else {
             imgSrc = [];
         }
@@ -144,22 +156,53 @@
             timeZone: "UTC",
         })}</td
     >
-    <td>
+    <td class="whitespace-nowrap">
         {formatDistance(log.distance)}
     </td>
 
-    <td>
+    <td class="whitespace-nowrap">
         {formatElevation(log.elevation_gain)}
     </td>
-    <td>
+    <td class="whitespace-nowrap">
         {formatElevation(log.elevation_loss)}
     </td>
-    <td>
+    <td class="whitespace-nowrap">
         {formatTimeHHMM(log.duration ? log.duration : undefined)}
     </td>
     {#if showCategory}
         <td>
-            {$_(log.expand?.trail?.expand?.category?.name ?? "-")}
+            {#if log.expand?.trail?.expand?.category || log.expand?.trail?.category}
+                <span
+                    class="relative mr-3 inline-block w-4 text-center"
+                    style:color={categoryIconColor}
+                >
+                    <i
+                        class="fa {displayTrailCategoryIcon(log.expand.trail)}"
+                    ></i>
+                    {#if displayTrailCategoryBadgeIcon(log.expand.trail)}
+                        <i
+                            class="fa {displayTrailCategoryBadgeIcon(
+                                log.expand.trail,
+                            )} absolute -right-1 -top-1 text-[8px]"
+                        ></i>
+                    {/if}
+                </span>{displayCategoryName(
+                    log.expand.trail.expand?.category ?? {
+                        name: log.expand.trail.category ?? "",
+                    },
+                    $locale,
+                ) || "-"}
+                {#if log.expand.trail.expand?.subcategory}
+                    <span class="text-gray-500 whitespace-nowrap">
+                        / {displaySubcategoryLabel(
+                            log.expand.trail.expand.subcategory,
+                            $locale,
+                        )}
+                    </span>
+                {/if}
+            {:else}
+                -
+            {/if}
         </td>
     {/if}
     {#if showTrail}
@@ -190,13 +233,13 @@
             <p
                 class="tooltip flex justify-center"
                 data-title="@{log.expand.author.preferred_username}{log.expand.author
-                    .isLocal
+                    .is_local
                     ? ''
                     : '@' + log.expand.author.domain}"
             >
                 <a
                     href="/profile/@{log.expand.author.preferred_username?.toLowerCase()}{log
-                        .expand.author.isLocal
+                        .expand.author.is_local
                         ? ''
                         : '@' + log.expand.author.domain}"
                 >

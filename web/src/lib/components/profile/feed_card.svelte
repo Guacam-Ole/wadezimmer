@@ -7,10 +7,17 @@
         formatDistance,
         formatElevation,
         formatHTMLAsText,
+        formatHTMLAsTextPreview,
         formatTimeHHMM,
         formatTimeSince,
     } from "$lib/util/format_util";
-    import { _ } from "svelte-i18n";
+    import {
+        displayCategoryIcon,
+        displayCategoryName,
+        displaySubcategoryIcon,
+        displaySubcategoryLabel,
+    } from "$lib/util/category_util";
+    import { _, locale } from "svelte-i18n";
     import TrailDropdown from "../trail/trail_dropdown.svelte";
     interface Props {
         feedItem: FeedItem;
@@ -20,17 +27,39 @@
 
     let fullDescription = $state(false);
 
+    const DESCRIPTION_PREVIEW_LENGTH = 100;
+
+    const descriptionPreview = $derived(
+        formatHTMLAsTextPreview(
+            feedItem.expand.item.description,
+            DESCRIPTION_PREVIEW_LENGTH,
+        ),
+    );
+
     const timeSince = $derived(
         formatTimeSince(new Date(feedItem.created ?? "")),
     );
 
     const photos = $derived((feedItem.expand.item as Trail).photos);
     const location = $derived((feedItem.expand.item as Trail).location);
-    const category = $derived((feedItem.expand.item as Trail).expand?.category?.name);
+    const category = $derived(
+        (feedItem.expand.item as Trail).expand?.category,
+    );
+    const subcategory = $derived(
+        (feedItem.expand.item as Trail).expand?.subcategory,
+    );
 
     const trails = $derived((feedItem.expand.item as List).trails);
 
     const author = $derived(feedItem.expand.item.expand?.author);
+
+    function feedCategoryIcon() {
+        if (subcategory) {
+            return displaySubcategoryIcon(subcategory, category);
+        }
+
+        return displayCategoryIcon(category);
+    }
 </script>
 
 <div class="feed-card px-6 py-4 rounded-xl border border-input-border">
@@ -78,7 +107,20 @@
             <div class="flex flex-wrap gap-x-8 gap-y-1">
                 {#if category}
                     <p>
-                        <i class="fa fa-shapes mr-3"> </i>{$_(category)}
+                        <i
+                            class="fa {feedCategoryIcon()} mr-3"
+                        ></i>{displayCategoryName(
+                            category,
+                            $locale,
+                        )}
+                        {#if subcategory}
+                            <span class="text-gray-500">
+                                / {displaySubcategoryLabel(
+                                    subcategory,
+                                    $locale,
+                                )}
+                            </span>
+                        {/if}
                     </p>
                 {/if}
                 {#if location}
@@ -151,6 +193,7 @@
                                         id: feedItem.item,
                                     },
                                     photo,
+                                    "600x0",
                                 )}
                                 alt=""
                             />
@@ -160,15 +203,10 @@
             {/if}
             {#if feedItem.expand.item.description?.length}
                 <p class="text-sm whitespace-pre-wrap mt-6">
-                    {formatHTMLAsText(
-                        !fullDescription
-                            ? feedItem.expand.item.description?.substring(
-                                  0,
-                                  100,
-                              )
-                            : feedItem.expand.item.description,
-                    )}
-                    {#if (feedItem.expand.item.description?.length ?? 0) > 100 && !fullDescription}
+                    {!fullDescription
+                        ? descriptionPreview.text
+                        : formatHTMLAsText(feedItem.expand.item.description)}
+                    {#if descriptionPreview.truncated && !fullDescription}
                         <button
                             onclick={(e) => {
                                 e.stopPropagation();
